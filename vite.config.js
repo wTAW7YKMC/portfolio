@@ -20,7 +20,9 @@ export default defineConfig(({ command }) => ({
     port: 4173,
   },
   build: {
-    outDir: 'dist',
+    /* 产物直接输出到 docs/：GitHub Pages 就是从 main 分支的 docs/ 目录发布的，
+       构建产物即发布产物，省掉"先 build 到 dist 再手工拷到 docs"这一步 */
+    outDir: 'docs',
     assetsDir: 'assets',
     chunkSizeWarningLimit: 1200,
   },
