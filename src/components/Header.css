@@ -1,0 +1,55 @@
+/* ==========================================================================
+   报头
+   ========================================================================== */
+
+.masthead{
+  padding-top: clamp(4px, .7vw, 14px);
+}
+
+/* 巨型哥特体标题：参考图里它横向占页面约 63% 宽，所以字号用 vw 跟随视口 */
+.masthead__title{
+  font-family: var(--font-masthead);
+  font-weight: 700;
+  font-size: clamp(46px, 6.1vw, 105px);
+  line-height: 1;
+  text-align: center;
+  letter-spacing: .004em;
+  margin-bottom: clamp(10px, 1.05vw, 20px);
+}
+
+/* 三格分隔条：左 / 中 / 右三等分 */
+.masthead__meta{
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: center;
+  padding: clamp(8px, .75vw, 13px) 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(13px, 1.05vw, 18px);
+  letter-spacing: .085em;
+  text-transform: uppercase;
+}
+
+.masthead__vol{ text-align: left; }
+.masthead__no{ text-align: right; }
+
+.masthead__date{
+  position: relative;
+  text-align: center;
+  padding: 0 clamp(10px, 1vw, 20px);
+}
+
+/* 竖分隔线用伪元素画：高度只有 1.15em，比给整格加 border 更贴近参考图
+   （参考图里的竖线只有文字那么高，不是贯通整行） */
+.masthead__date::before,
+.masthead__date::after{
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 1.15em;
+  background: var(--ink);
+  transform: translateY(-50%);
+}
+.masthead__date::before{ left: 0; }
+.masthead__date::after{ right: 0; }

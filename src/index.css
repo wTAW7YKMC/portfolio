@@ -1,0 +1,67 @@
+/* ==========================================================================
+   全局基础层 · 复古报纸
+   --------------------------------------------------------------------------
+   底层设定：
+     · 泛黄报纸底色 + 粗糙纸纹（纯 CSS 渐变叠加，无外部图片依赖）
+     · 全局衬线字体基调，正文两端对齐（报纸排版的灵魂）
+     · 显示型字号统一用 vw 跟随视口缩放，因此在任何窗口宽度下
+       标题与版心的比例关系都与参考图保持一致
+   ========================================================================== */
+
+:root{
+  /* ---------- 色彩 ---------- */
+  --paper:      #F4F1EA;              /* 泛黄报纸底色 */
+  --ink:        #1A1A1A;              /* 印刷油墨深黑 */
+
+  /* ---------- 版心 ---------- */
+  --page-max:   1700px;               /* 版心最大宽度 */
+  --page-pad:   clamp(16px, 1.9vw, 34px);
+
+  /* ---------- 字体族 ---------- */
+  --font-masthead: 'UnifrakturCook', 'Playfair Display', Georgia, serif;
+  --font-display:  'Playfair Display', 'Noto Serif SC', Georgia, serif;
+  --font-serif:    'EB Garamond', 'Noto Serif SC', Georgia, 'Times New Roman', serif;
+
+  /* ---------- 油墨质感 ----------
+     极细的左右重影，模拟铅字压印时边缘轻微洇墨的效果，
+     加在大标题上会明显"像印出来的"而不是"屏幕上打出来的" */
+  --ink-bleed: .5px 0 0 rgba(26,26,26,.30), -.5px 0 0 rgba(26,26,26,.15);
+}
+
+*,
+*::before,
+*::after{ box-sizing: border-box; }
+
+html{ -webkit-text-size-adjust: 100%; }
+
+body{
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: clamp(16.5px, 1.12vw, 19.5px);
+  line-height: 1.52;
+
+  /* 纸纹：四处不规则水渍 + 两层细密网格，叠出"粗糙但干净"的手感 */
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(circle at 18% 12%, rgba(150,122,72,.055), transparent 42%),
+    radial-gradient(circle at 82% 34%, rgba(150,122,72,.045), transparent 38%),
+    radial-gradient(circle at 46% 78%, rgba(124,98,56,.050), transparent 44%),
+    radial-gradient(circle at 92% 92%, rgba(150,122,72,.040), transparent 34%),
+    repeating-linear-gradient(0deg,  rgba(96,74,42,.030) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(96,74,42,.022) 0 1px, transparent 1px 4px);
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+img{ display: block; max-width: 100%; }
+
+h1, h2, h3, h4, p, figure{ margin: 0; }
+
+/* 正文段落一律两端对齐 */
+p{
+  text-align: justify;
+  hyphens: auto;
+}

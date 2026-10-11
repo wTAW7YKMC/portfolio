@@ -1,0 +1,36 @@
+/* ==========================================================================
+   版面骨架 · 版心容器与公共分隔线
+   ========================================================================== */
+
+.page{
+  width: 100%;
+  min-height: 100vh;
+  padding:
+    clamp(16px, 1.7vw, 30px)      /* 上 */
+    var(--page-pad)               /* 左右：报纸不留白边，但需要一点呼吸位 */
+    clamp(44px, 3.6vw, 74px);     /* 下 */
+}
+
+/* 版心：约 1700px，居中 */
+.newspaper{
+  max-width: var(--page-max);
+  margin: 0 auto;
+}
+
+/* ---------- 公共分隔线 ----------
+   thin  : 栏目内细线（小标题下、栏与栏之间）
+   thick : 版面级粗线（报头下方、头条上方） */
+.rule--thin{
+  height: 2px;
+  background: var(--ink);
+}
+
+.rule--thick{
+  height: 5px;
+  background: var(--ink);
+}
+
+/* 通用的"油墨感"大标题处理，供各组件复用 */
+.ink{
+  text-shadow: var(--ink-bleed);
+}

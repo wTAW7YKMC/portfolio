@@ -1,0 +1,16 @@
+/* ==========================================================================
+   主头条
+   ========================================================================== */
+
+.headline{
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(30px, 3.65vw, 63px);
+  line-height: 1.02;
+  letter-spacing: -.006em;
+  text-transform: uppercase;
+  margin:
+    clamp(16px, 1.5vw, 26px)   /* 与报头粗线的间距 */
+    0
+    clamp(14px, 1.25vw, 22px); /* 与头条区的间距 */
+}

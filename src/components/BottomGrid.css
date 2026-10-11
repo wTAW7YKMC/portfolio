@@ -1,0 +1,84 @@
+/* ==========================================================================
+   底部三栏图文区
+   ========================================================================== */
+
+.bottom{
+  display: grid;
+  grid-template-columns: 1.65fr 1fr 1.25fr;   /* 参考图实测比例 */
+  border-top: 2px solid var(--ink);
+  margin-top: clamp(20px, 1.9vw, 34px);
+  padding-top: clamp(15px, 1.45vw, 26px);
+}
+
+/* 每栏左右留出内边距，靠 border-left 画出栏间竖线 */
+.col{
+  padding: 0 clamp(15px, 1.45vw, 28px);
+  border-left: 2px solid var(--ink);
+}
+.col:first-child{
+  padding-left: 0;
+  border-left: 0;
+}
+.col:last-child{ padding-right: 0; }
+
+/* ---------- 小标题 ---------- */
+.col__title{
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(19px, 2.5vw, 43px);
+  line-height: 1.06;
+  letter-spacing: -.006em;
+  text-transform: uppercase;
+}
+
+.col__rule{
+  height: 1.5px;
+  margin:
+    clamp(8px, .7vw, 12px)
+    0
+    clamp(10px, .85vw, 15px);
+}
+
+/* 右栏的 "Love and Courage"：参考图里是斜体、标题式大小写，
+   并非全大写，因此这里单独覆盖掉 uppercase */
+.col__title--italic{
+  font-style: italic;
+  font-weight: 700;
+  font-size: clamp(16px, 1.75vw, 30px);
+  text-transform: none;
+  letter-spacing: 0;
+  margin: clamp(10px, .9vw, 16px) 0 clamp(7px, .65vw, 11px);
+}
+
+/* ---------- 插图 ---------- */
+.col__media{ margin-bottom: clamp(10px, .9vw, 16px); }
+
+.col__media img{
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  filter: grayscale(100%);
+  background: #111;
+}
+
+/* ---------- 正文 ---------- */
+.col__text{
+  font-size: .96em;
+  margin-bottom: .75em;
+}
+.col__text:last-child{ margin-bottom: 0; }
+
+/* 倾斜强调句 */
+.col__quote{
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 700;
+  font-size: clamp(15px, 1.15vw, 20px);
+  line-height: 1.3;
+  text-align: left;
+  margin-top: clamp(8px, .8vw, 14px);
+}
+.col__quote span{
+  display: inline-block;
+  padding-left: 1.2em;
+}
