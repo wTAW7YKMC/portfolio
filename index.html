@@ -6,14 +6,15 @@
 <title>Portfolio · Poster Set 01–08</title>
 <style>
 /* ==========================================================================
-   沉浸式海报翻页展示
+   海报长图 · 八张一组（纵向无缝滚动）
    --------------------------------------------------------------------------
    设计基准 : 沿用海报自身的四色印刷体系（奶油纸/近黑/砖红/钴蓝）
-   画布规格 : 每张海报固定 720×1020，通过 --k 等比缩放适配任意屏幕
-   切换逻辑 : 三通道并行 —— 滚轮 / 拖拽滑动(Pointer Events 统一鼠标+触摸) / 按键
-   动效基调 : 印刷品"推送"式横向位移 + 轻微景深收敛，缓动 cubic-bezier(.72,0,.24,1)
-              （该曲线起止近乎静止、中段果断，接近印刷机送纸的机械感，
-                不论断、不弹跳，与海报的冷静调性一致）
+   画布规格 : 每张海报固定 720×1020 的设计画布，按 --k = 视口宽 / 720 缩放，
+              缩放后宽度正好贴满视口，八张纵向首尾紧贴堆叠成一条连续长图，
+              无缝隙、无边框、无内外边距，宽高比恒定 720:1020 不会拉伸变形
+   页面内容 : 只有这八张海报，纵向拼接；无切换、无导航、无任何界面元素
+   动效基调 : 每块海报进入视口时淡入 + 由下向上轻移 28px（滚动入场），
+              缓动 cubic-bezier(.72,0,.24,1)（起止近乎静止、中段果断）
    ========================================================================== */
 *{box-sizing:border-box;}
 :root{
@@ -22,49 +23,50 @@
   --red:#C33A28;
   --blue:#1F4C9E;
 
-  --k:1;                                   /* 海报等比缩放系数 */
+  --k:1;                                   /* 海报缩放系数（= 视口内容宽 / 720） */
   --ease:cubic-bezier(.72,0,.24,1);        /* 主缓动 */
-  --dur:860ms;                             /* 主位移时长 */
-  --fade:640ms;                            /* 透明度时长 */
-  --line:rgba(237,228,210,.20);
-  --line-2:rgba(237,228,210,.42);
 }
-html,body{height:100%;}
+/* 归零：左右不允许出现滚动条，纵向允许自然滚动 */
+html,body{
+  width:100%;margin:0;padding:0;overflow-x:hidden;
+}
 body{
-  margin:0;overflow:hidden;
-  background:#5E5852;
-  background-image:radial-gradient(circle at 50% 40%,#7A746B 0%,#565049 58%,#3A3632 100%);
-  color:var(--cream);
+  background:var(--cream);                 /* 兜底底色 */
+  color:var(--ink);
   font-family:"Helvetica Neue",Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;
   -webkit-font-smoothing:antialiased;
-  overscroll-behavior:none;
-  user-select:none;-webkit-user-select:none;
+  overscroll-behavior-y:none;
 }
 
-/* ---------- 舞台与幻灯片 ---------- */
-.stage{position:fixed;inset:0;overflow:hidden;touch-action:none;cursor:grab;}
-.stage.dragging{cursor:grabbing;}
+/* ---------- 长图容器：八块海报首尾紧贴 ---------- */
+.gallery{display:block;width:100%;}
 
-.slide{
-  position:absolute;inset:0;
-  display:flex;align-items:center;justify-content:center;
-  will-change:transform,opacity;
-  transition:transform var(--dur) var(--ease),
-             opacity var(--fade) var(--ease);
-  transform:translate3d(0,0,0) scale(1);
-  opacity:1;
+.plate{
+  position:relative;width:100%;
+  height:calc(var(--k) * 1020px);      /* 与缩放后海报的视觉高度一致 → 上下严丝合缝 */
+  overflow:hidden;
+  background:var(--cream);             /* 兜底底色（取海报顶部同色），淡入过程不露异色 */
 }
-.slide:not(.is-active){pointer-events:none;}
-/* 向前：当前页左移缩小淡出，下一页自右侧推入 —— 反向自动镜像 */
-.slide.is-prev{transform:translate3d(-7%,0,0) scale(.93);opacity:0;}
-.slide.is-next{transform:translate3d(7%,0,0) scale(.93);opacity:0;}
+.plate.is-dark{background:var(--ink);}
 
-/* ---------- 海报等比容器 ---------- */
+/* ---------- 海报容器：固定 720×1020 画布，左上角为原点按 --k 缩放 ---------- */
 .poster-fit{
-  position:relative;width:720px;height:1020px;flex:0 0 auto;
-  transform:scale(var(--k));transform-origin:center center;
+  position:absolute;top:0;left:0;
+  width:720px;height:1020px;
+  transform-origin:top left;
+  transform:scale(var(--k));
   isolation:isolate;
-  box-shadow:0 34px 72px rgba(0,0,0,.46),0 3px 0 rgba(255,255,255,.05) inset;
+}
+
+/* ---------- 滚动入场：淡入 + 由下向上轻移（仅 JS 可用时启用，渐进增强） ---------- */
+.js-reveal .plate .poster-fit{
+  opacity:0;
+  transform:translate3d(0,28px,0) scale(var(--k));
+  transition:opacity .62s var(--ease),transform .62s var(--ease);
+}
+.js-reveal .plate.is-in .poster-fit{
+  opacity:1;
+  transform:translate3d(0,0,0) scale(var(--k));
 }
 
 /* ---------- 海报内部（与 posters.html 完全一致的设计语言） ---------- */
@@ -78,126 +80,14 @@ p.a{margin:0;}
 .rule{background:currentColor;}
 .grain{position:absolute;inset:0;pointer-events:none;opacity:.3;mix-blend-mode:multiply;}
 
-/* ---------- 全局统一质感：胶片噪点 + 暗角 ---------- */
-.veil{position:fixed;inset:0;pointer-events:none;z-index:40;}
-.veil .dots{
-  position:absolute;inset:0;opacity:.055;mix-blend-mode:overlay;
-  background-image:radial-gradient(rgba(255,255,255,.9) .5px,transparent .5px);
-  background-size:3px 3px;
-}
-.veil .vig{
-  position:absolute;inset:0;
-  background:radial-gradient(ellipse at 50% 46%,transparent 42%,rgba(0,0,0,.30) 100%);
-}
-
-/* ---------- 顶部信息条 ---------- */
-.topbar{
-  position:fixed;left:0;right:0;top:0;z-index:30;
-  display:flex;justify-content:space-between;align-items:center;
-  padding:22px 30px;pointer-events:none;
-  font-size:10.5px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;
-  color:rgba(237,228,210,.62);
-}
-.topbar .tb-r{font-family:"Arial Narrow",Arial,sans-serif;letter-spacing:.1em;font-size:12px;}
-.topbar .tb-r b{color:var(--cream);font-size:15px;}
-
-/* ---------- 前后切换按钮（左右两侧） ---------- */
-.edge{
-  position:fixed;top:50%;z-index:30;margin-top:-28px;
-  width:56px;height:56px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  border:1px solid var(--line);background:rgba(23,20,15,.16);
-  color:var(--cream);cursor:pointer;padding:0;
-  opacity:.5;
-  transition:opacity .4s var(--ease),background .4s var(--ease),
-             border-color .4s var(--ease),transform .4s var(--ease);
-  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
-}
-.edge:hover{opacity:1;background:rgba(237,228,210,.10);border-color:var(--line-2);}
-.edge.prev{left:26px;}
-.edge.next{right:26px;}
-.edge.prev:hover{transform:translateX(-3px);}
-.edge.next:hover{transform:translateX(3px);}
-.edge[disabled]{opacity:.14;cursor:default;}
-.edge[disabled]:hover{transform:none;background:rgba(23,20,15,.16);border-color:var(--line);}
-.edge svg{width:16px;height:16px;}
-
-/* ---------- 底部信息台 ---------- */
-.dock{
-  position:fixed;left:0;right:0;bottom:0;z-index:30;
-  padding:0 30px calc(20px + env(safe-area-inset-bottom));
-  pointer-events:none;
-}
-.dock::before{ /* 底部渐隐，保证文字始终可读 */
-  content:'';position:absolute;left:0;right:0;bottom:0;height:190px;
-  background:linear-gradient(to top,rgba(20,18,15,.66),rgba(20,18,15,0));
-  pointer-events:none;
-}
-.dock-in{
-  position:relative;display:flex;align-items:flex-end;justify-content:space-between;
-  gap:20px;padding-bottom:18px;
-}
-.meta{display:flex;align-items:baseline;gap:14px;min-width:0;}
-.meta .idx{
-  font-family:"Arial Narrow",Arial,sans-serif;font-weight:700;
-  font-size:46px;line-height:.82;letter-spacing:-.01em;color:var(--cream);
-}
-.meta .txt{display:flex;flex-direction:column;gap:5px;min-width:0;}
-.meta .mt-title{
-  font-family:"Arial Narrow",Arial,sans-serif;font-weight:700;
-  font-size:17px;letter-spacing:.16em;text-transform:uppercase;color:var(--cream);
-}
-.meta .mt-sub{
-  font-style:normal;font-size:10.5px;letter-spacing:.14em;color:rgba(237,228,210,.58);
-}
-/* 切换时信息台轻微上浮，呼应海报的印刷位移 */
-.meta.swap .idx,.meta.swap .txt{animation:metaIn 560ms var(--ease) both;}
-@keyframes metaIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
-
-/* ---------- 底部进度轨（8 段，可点击） ---------- */
-.rail{
-  position:absolute;left:30px;right:30px;bottom:0;height:14px;
-  display:flex;align-items:center;gap:4px;pointer-events:auto;
-}
-.rail button{
-  flex:1;height:3px;padding:0;border:0;cursor:pointer;
-  background:rgba(237,228,210,.20);
-  transition:background .45s var(--ease),height .45s var(--ease);
-}
-.rail button:hover{background:rgba(237,228,210,.55);height:5px;}
-.rail button.on{background:var(--cream);height:5px;}
-
-/* ---------- 首次进入提示 ---------- */
-.hint{
-  position:fixed;left:50%;bottom:96px;z-index:30;transform:translateX(-50%);
-  font-size:10.5px;letter-spacing:.26em;text-transform:uppercase;
-  color:rgba(237,228,210,.55);white-space:nowrap;
-  transition:opacity .6s var(--ease),transform .6s var(--ease);
-  pointer-events:none;
-}
-.hint.off{opacity:0;transform:translateX(-50%) translateY(8px);}
-
-/* ---------- 窄屏适配 ---------- */
-@media (max-width:820px){
-  .topbar{padding:16px 18px;}
-  .dock{padding:0 18px calc(16px + env(safe-area-inset-bottom));}
-  .rail{left:18px;right:18px;}
-  .edge{width:44px;height:44px;margin-top:-22px;}
-  .edge.prev{left:10px;} .edge.next{right:10px;}
-  .meta .idx{font-size:34px;}
-  .meta .mt-title{font-size:14px;letter-spacing:.12em;}
-  .meta .mt-sub{font-size:9.5px;}
-  .hint{bottom:84px;}
-}
-@media (max-width:520px){
-  .edge{opacity:.36;}
-  .meta .mt-sub{display:none;}
-}
-
 /* ---------- 无障碍：尊重系统减弱动效设置 ---------- */
 @media (prefers-reduced-motion:reduce){
-  :root{--dur:320ms;--fade:240ms;}
-  .meta.swap .idx,.meta.swap .txt{animation-duration:1ms;}
+  .js-reveal .plate .poster-fit,
+  .js-reveal .plate.is-in .poster-fit{
+    opacity:1;
+    transform:scale(var(--k));
+    transition:none;
+  }
 }
 </style>
 </head>
@@ -218,10 +108,10 @@ p.a{margin:0;}
   </defs>
 </svg>
 
-<!-- 舞台：八张海报各自一个全屏容器 -->
-<main class="stage" id="stage">
+<!-- 长图：八张海报首尾紧贴，纵向堆叠 -->
+<main class="gallery" id="gallery">
 
-  <section class="slide" data-i="0"><div class="poster-fit"><div class="poster p1">
+  <section class="plate" data-i="0"><div class="poster-fit"><div class="poster p1">
 
     <!-- 标题：整行撑满 -->
     <svg class="a" style="left:20px;top:16px;width:680px;height:152px" viewBox="0 0 680 152">
@@ -292,7 +182,7 @@ p.a{margin:0;}
     </svg>
 
     <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
-  <section class="slide" data-i="1"><div class="poster-fit"><div class="poster dark p2">
+  <section class="plate" data-i="1"><div class="poster-fit"><div class="poster dark p2">
 
     <svg class="a" style="left:20px;top:14px;width:680px;height:122px" viewBox="0 0 680 122">
       <text class="tt" x="0" y="116" font-size="118" fill="#EDE4D2" textLength="680" lengthAdjust="spacingAndGlyphs">PLAYER ONE</text>
@@ -399,7 +289,7 @@ p.a{margin:0;}
     </svg>
 
     <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
-  <section class="slide" data-i="2"><div class="poster-fit"><div class="poster dark p3">
+  <section class="plate" data-i="2"><div class="poster-fit"><div class="poster dark p3">
 
     <svg class="a" style="left:20px;top:16px;width:680px;height:190px" viewBox="0 0 680 190">
       <text class="tt" x="0" y="100" font-size="118" fill="#EDE4D2" textLength="680" lengthAdjust="spacingAndGlyphs">EXPRESS</text>
@@ -480,7 +370,7 @@ p.a{margin:0;}
     </div>
 
     <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
-  <section class="slide" data-i="3"><div class="poster-fit"><div class="poster p4">
+  <section class="plate" data-i="3"><div class="poster-fit"><div class="poster p4">
 
     <svg class="a" style="left:20px;top:16px;width:680px;height:120px" viewBox="0 0 680 120">
       <text class="tt" x="0" y="114" font-size="116" fill="#17140F" textLength="680" lengthAdjust="spacingAndGlyphs">CHANNEL ZERO</text>
@@ -544,7 +434,7 @@ p.a{margin:0;}
     </svg>
 
     <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
-  <section class="slide" data-i="4"><div class="poster-fit"><div class="poster dark p5">
+  <section class="plate" data-i="4"><div class="poster-fit"><div class="poster dark p5">
 
     <svg class="a" style="left:20px;top:16px;width:680px;height:190px" viewBox="0 0 680 190">
       <text class="tt" x="0" y="100" font-size="118" fill="#EDE4D2" textLength="680" lengthAdjust="spacingAndGlyphs">DEEP</text>
@@ -599,7 +489,7 @@ p.a{margin:0;}
     </g>
 
     <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
-  <section class="slide" data-i="5"><div class="poster-fit"><div class="poster p6">
+  <section class="plate" data-i="5"><div class="poster-fit"><div class="poster p6">
 
     <!-- 左侧黑色信息板 -->
     <div class="a" style="left:0;top:0;width:330px;height:640px;background:#17140F"></div>
@@ -678,7 +568,7 @@ p.a{margin:0;}
     <div class="a lbl" style="left:512px;top:776px;font-size:9.5px;color:#17140F;">DATE: 1976</div>
 
     <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
-  <section class="slide" data-i="6"><div class="poster-fit"><div class="poster p7">
+  <section class="plate" data-i="6"><div class="poster-fit"><div class="poster p7">
 
     <svg class="a" style="left:20px;top:14px;width:252px;height:96px" viewBox="0 0 252 96">
       <text class="tt" x="0" y="94" font-size="118" fill="#17140F" textLength="252" lengthAdjust="spacingAndGlyphs">NEW</text>
@@ -757,7 +647,7 @@ p.a{margin:0;}
     </div>
 
     <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
-  <section class="slide" data-i="7"><div class="poster-fit"><div class="poster p8">
+  <section class="plate" data-i="7"><div class="poster-fit"><div class="poster p8">
 
     <svg class="a" style="left:20px;top:14px;width:416px;height:190px" viewBox="0 0 416 190">
       <text class="tt" x="0" y="100" font-size="118" fill="#17140F" textLength="416" lengthAdjust="spacingAndGlyphs">NIGHT</text>
@@ -843,266 +733,48 @@ p.a{margin:0;}
 
 </main>
 
-<!-- 统一质感层 -->
-<div class="veil"><div class="dots"></div><div class="vig"></div></div>
-
-<!-- 顶部信息 -->
-<header class="topbar">
-  <span class="tb-l">Portfolio · Poster Set</span>
-  <span class="tb-r"><b id="cur">01</b> / 08</span>
-</header>
-
-<!-- 前后切换按钮 -->
-<button class="edge prev" id="btnPrev" aria-label="上一张海报">
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 2.5 L4.5 8 L10.5 13.5"/></svg>
-</button>
-<button class="edge next" id="btnNext" aria-label="下一张海报">
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 2.5 L11.5 8 L5.5 13.5"/></svg>
-</button>
-
-<!-- 底部信息台 + 进度轨 -->
-<footer class="dock">
-  <div class="dock-in">
-    <div class="meta" id="meta">
-      <span class="idx" id="idxNum">01</span>
-      <span class="txt">
-        <b class="mt-title" id="mtTitle">HOME SIGNAL</b>
-        <i class="mt-sub" id="mtSub">家用录像系统 · 1978</i>
-      </span>
-    </div>
-  </div>
-  <nav class="rail" id="rail" aria-label="海报进度"></nav>
-</footer>
-
-<div class="hint" id="hint">滚轮 / 滑动 / ← → 切换</div>
-
 <script>
 (function(){
   'use strict';
 
-  /* ---------- 海报清单 ---------- */
-  var POSTERS = [
-    { t:'HOME SIGNAL',   s:'家用录像系统 · 1978' },
-    { t:'PLAYER ONE',    s:'街机控制信号 · 1979' },
-    { t:'EXPRESS CITY',  s:'环城快线 72' },
-    { t:'CHANNEL ZERO',  s:'首次播出 · 1976' },
-    { t:'DEEP ORBIT',    s:'深空档案 · 1977' },
-    { t:'VELOCITY TEST', s:'运动研究 · 1976' },
-    { t:'NEW STANDARD',  s:'设计双年展 · 1982' },
-    { t:'NIGHT FLIGHT',  s:'夜航 · 21.07.80' }
-  ];
-  var N = POSTERS.length;
+  /* 八块海报容器（每块恰好一屏高度，首尾紧贴） */
+  var plates = Array.prototype.slice.call(document.querySelectorAll('.plate'));
 
-  var stage   = document.getElementById('stage');
-  var slides  = Array.prototype.slice.call(document.querySelectorAll('.slide'));
-  var meta    = document.getElementById('meta');
-  var idxNum  = document.getElementById('idxNum');
-  var mtTitle = document.getElementById('mtTitle');
-  var mtSub   = document.getElementById('mtSub');
-  var cur     = document.getElementById('cur');
-  var rail    = document.getElementById('rail');
-  var hint    = document.getElementById('hint');
-  var btnPrev = document.getElementById('btnPrev');
-  var btnNext = document.getElementById('btnNext');
-
-  var idx = 0;          /* 当前页 */
-  var busy = false;     /* 动画锁，避免高频触发导致跳页 */
-  var LOCK = 620;       /* 动画锁时长 */
-
-  /* ---------- 工具 ---------- */
-  function pad(n){ return (n < 10 ? '0' : '') + n; }
-
-  function idxText(el, i){
-    el.textContent = pad(i + 1);
-  }
-
-  /* ---------- 等比适配：保证海报在任意尺寸下比例正确、完整可见 ---------- */
+  /* ---------- 铺满适配：按视口宽度定比例 ----------
+     令缩放后的宽度正好等于视口内容宽度（不含竖向滚动条），
+     于是八张海报左右贴满、上下一张接一张，拼成一条无缝长图；
+     高度按 720:1020 同比例推导，绝无拉伸。 */
   function fit(){
-    var vw = window.innerWidth, vh = window.innerHeight;
-    /* 预留：左右给切换按钮，上下给顶部信息条与底部信息台 */
-    var padX = vw < 820 ? 44  : 150;
-    var padY = vh < 700 ? 120 : 196;
-    var k = Math.min((vw - padX) / 720, (vh - padY) / 1020);
-    k = Math.max(0.26, Math.min(k, 1.5));   /* 上限 1.5 倍，避免 4K 屏下噪点纹理被过度放大 */
-    document.documentElement.style.setProperty('--k', k.toFixed(4));
+    var w = document.documentElement.clientWidth || window.innerWidth || 1;
+    document.documentElement.style.setProperty('--k', (w / 720).toFixed(6));
   }
   window.addEventListener('resize', fit);
   window.addEventListener('orientationchange', function(){ setTimeout(fit, 140); });
   fit();
 
-  /* ---------- 进度轨 ---------- */
-  var segs = [];
-  (function buildRail(){
-    for(var i = 0; i < N; i++){
-      (function(i){
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.setAttribute('aria-label', '第 ' + (i + 1) + ' 张');
-        b.addEventListener('click', function(){ go(i); used(); });
-        rail.appendChild(b);
-        segs.push(b);
-      })(i);
-    }
-  })();
-
-  /* ---------- 状态渲染 ---------- */
-  function paint(animateMeta){
-    for(var i = 0; i < N; i++){
-      var el = slides[i];
-      el.classList.toggle('is-active', i === idx);
-      el.classList.toggle('is-prev',   i <  idx);
-      el.classList.toggle('is-next',   i >  idx);
-    }
-    idxText(idxNum, idx);
-    idxText(cur, idx);
-    mtTitle.textContent = POSTERS[idx].t;
-    mtSub.textContent   = POSTERS[idx].s;
-    for(var j = 0; j < N; j++) segs[j].classList.toggle('on', j === idx);
-    btnPrev.disabled = (idx === 0);
-    btnNext.disabled = (idx === N - 1);
-
-    if(animateMeta){
-      meta.classList.remove('swap');
-      void meta.offsetWidth;          /* 强制重排以重播动画 */
-      meta.classList.add('swap');
-    }
-  }
-
-  /* ---------- 翻页 ---------- */
-  function go(to){
-    if(busy) return;
-    to = Math.max(0, Math.min(N - 1, to));
-    if(to === idx) return;
-    busy = true;
-    idx = to;
-    paint(true);
-    setTimeout(function(){ busy = false; }, LOCK);
-  }
-
-  /* ---------- 提示 ---------- */
-  var hinted = false;
-  function used(){
-    if(hinted) return;
-    hinted = true;
-    hint.classList.add('off');
-    setTimeout(function(){ hint.style.display = 'none'; }, 700);
-  }
-  setTimeout(used, 6000);           /* 6 秒后自行淡出 */
-
-  /* ---------- 1. 点击按钮 ---------- */
-  btnPrev.addEventListener('click', function(){ go(idx - 1); used(); });
-  btnNext.addEventListener('click', function(){ go(idx + 1); used(); });
-
-  /* ---------- 2. 键盘 ---------- */
-  window.addEventListener('keydown', function(e){
-    var k = e.key;
-    if(k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown' || k === ' '){
-      e.preventDefault(); go(idx + 1); used();
-    } else if(k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp'){
-      e.preventDefault(); go(idx - 1); used();
-    } else if(k === 'Home'){ e.preventDefault(); go(0); used(); }
-    else if(k === 'End'){ e.preventDefault(); go(N - 1); used(); }
+  /* ---------- 给近黑底的海报块标注兜底底色，避免淡入瞬间透出异色 ---------- */
+  plates.forEach(function(p){
+    var po = p.querySelector('.poster');
+    if(po && po.classList.contains('dark')) p.classList.add('is-dark');
   });
 
-  /* ---------- 3. 滚轮 / 触控板 ---------- */
-  var whellAcc = 0, wheelLast = 0;
-  window.addEventListener('wheel', function(e){
-    e.preventDefault();
-    used();
-    if(busy) return;
-    var now = Date.now();
-    if(now - wheelLast > 280) whellAcc = 0;      /* 停顿即视为新一次手势 */
-    wheelLast = now;
-    var d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
-    whellAcc += d;
-    if(Math.abs(whellAcc) > 46){
-      go(idx + (whellAcc > 0 ? 1 : -1));
-      whellAcc = 0;
-    }
-  }, { passive:false });
+  /* ---------- 滚动入场：淡入 + 由下向上轻移 ----------
+     渐进增强：仅在支持 IntersectionObserver 且用户未开启"减弱动效"时启用；
+     其余情况海报直接正常显示，不影响阅读。 */
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  /* ---------- 4. 拖拽滑动（Pointer Events 同时覆盖鼠标与触摸） ---------- */
-  var drag = { on:false, x0:0, y0:0, dx:0, t0:0, locked:false };
-
-  function activeEl(){ return slides[idx]; }
-
-  function clearInline(){
-    for(var i = 0; i < N; i++){
-      var s = slides[i];
-      s.style.transition = '';
-      s.style.transform  = '';
-      s.style.opacity    = '';
-    }
+  if('IntersectionObserver' in window && !reduced){
+    document.documentElement.classList.add('js-reveal');
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){
+          en.target.classList.add('is-in');
+          io.unobserve(en.target);     /* 入场一次后即停止观察 */
+        }
+      });
+    }, { rootMargin:'0px 0px -12% 0px', threshold:0.01 });
+    plates.forEach(function(p){ io.observe(p); });
   }
-
-  stage.addEventListener('pointerdown', function(e){
-    if(e.pointerType === 'mouse' && e.button !== 0) return;
-    drag.on = true; drag.x0 = e.clientX; drag.y0 = e.clientY;
-    drag.dx = 0; drag.t0 = Date.now(); drag.locked = false;
-    try{ stage.setPointerCapture(e.pointerId); }catch(err){}
-  });
-
-  stage.addEventListener('pointermove', function(e){
-    if(!drag.on) return;
-    var mx = e.clientX - drag.x0;
-    var my = e.clientY - drag.y0;
-
-    if(!drag.locked){
-      if(Math.abs(mx) < 8 && Math.abs(my) < 8) return;
-      if(Math.abs(my) > Math.abs(mx)){ drag.on = false; return; }  /* 纵向手势交还页面 */
-      drag.locked = true;
-      stage.classList.add('dragging');
-      activeEl().style.transition = 'none';
-      var nb0 = slides[drag.dx < 0 ? idx + 1 : idx - 1];
-      if(nb0) nb0.style.transition = 'none';
-    }
-
-    drag.dx = mx;
-    var w = window.innerWidth || 1;
-    var p = Math.min(Math.abs(mx) / w, 1);
-    var el = activeEl();
-    el.style.transform = 'translate3d(' + mx + 'px,0,0) scale(' + (1 - Math.min(p, .09) * .55) + ')';
-    el.style.opacity   = String(1 - Math.min(p * .55, .5));
-
-    /* 相邻页跟手推进，保证"推送"连续、不断层 */
-    var nb = slides[mx < 0 ? idx + 1 : idx - 1];
-    if(nb && !nb.classList.contains('is-active')){
-      nb.style.transition = 'none';
-      var side = mx < 0 ? 1 : -1;
-      nb.style.transform = 'translate3d(' + (side * 7 * (1 - p)) + '%,0,0) scale(' + (.93 + .07 * p) + ')';
-      nb.style.opacity   = String(Math.min(p * 1.05, .95));
-    }
-  });
-
-  function endDrag(){
-    if(!drag.on) return;
-    var wasLocked = drag.locked;
-    var d  = drag.dx;
-    var dt = Math.max(Date.now() - drag.t0, 1);
-    var v  = Math.abs(d) / dt;                     /* 甩动速度 px/ms */
-
-    drag.on = false; drag.locked = false; drag.dx = 0;
-    stage.classList.remove('dragging');
-
-    var threshold = Math.min(120, (window.innerWidth || 800) * 0.15);
-    /* 最小位移下限 18px：即便甩动速度很快，位移过小也不翻页，避免鼠标轻微抖动误触 */
-    var commit = wasLocked && Math.abs(d) > 18 && (Math.abs(d) > threshold || v > 0.5);
-
-    /* 先恢复 CSS 过渡并清掉内联值：浏览器会从"当前拖拽位置"平滑补间到类目标态 */
-    clearInline();
-
-    if(commit) go(idx + (d < 0 ? 1 : -1));
-  }
-
-  stage.addEventListener('pointerup', endDrag);
-  stage.addEventListener('pointercancel', endDrag);
-  stage.addEventListener('pointerleave', function(){ if(drag.on) endDrag(); });
-
-  /* 阻止拖拽时选中文本 / 触发原生图片拖拽 */
-  stage.addEventListener('dragstart', function(e){ e.preventDefault(); });
-
-  /* ---------- 初始化 ---------- */
-  paint(false);
 })();
 </script>
 </body>
