@@ -13,20 +13,17 @@
     <meta property="og:type" content="website" />
 
     <!--
-      字体：复古魔法报纸体系（英文 + 中文配合，display=swap 避免文字长时间不可见）
-        · UnifrakturMaguntia / Cinzel Decorative —— 哥特、魔幻装饰体：报头与开屏主标题
-        · Playfair Display / Noto Serif SC        —— 优雅复古衬线体：新闻大标题、小标题
-        · PT Serif / Noto Serif SC                —— 高可读性衬线体：正文
-        · Special Elite / Caveat                  —— 打字机、手写体：倾斜强调句
+      字体：全部自托管在 src/assets/fonts/ 下（由 src/main.jsx 引入），
+      本页不再向 Google Fonts 等外部 CDN 发请求。
+        · Beachyland                        —— 报头 / 开屏主标题（花体，设计师自备）
+        · Playfair Display                  —— 新闻大标题、小标题（含斜体）
+        · PT Serif                          —— 正文
+        · Special Elite                     —— 打字机强调句
+      此前用 <link> 引 Google Fonts：那一行是阻塞渲染的样式表，国内实测要约 3 秒才返回，
+      整页（含开屏页）都得等它，字体因此显示很慢；改为本地自托管后延迟基本消失。
     -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Cinzel+Decorative:wght@400;700;900&family=Noto+Serif+SC:wght@400;700;900&family=PT+Serif:ital,wght@0,400;0,700;1,400;1,700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Special+Elite&family=UnifrakturMaguntia&display=swap"
-      rel="stylesheet"
-    />
-    <script type="module" crossorigin src="/portfolio/assets/index-Cwn1DtUY.js"></script>
-    <link rel="stylesheet" crossorigin href="/portfolio/assets/index-BHpR31pS.css">
+    <script type="module" crossorigin src="/portfolio/assets/index-DQaevwot.js"></script>
+    <link rel="stylesheet" crossorigin href="/portfolio/assets/index-DEPwtkLb.css">
   </head>
   <body>
     <div id="root"></div>
