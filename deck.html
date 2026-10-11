@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Portfolio · Poster Set 01–08</title>
+<style>
+/* ==========================================================================
+   沉浸式海报翻页展示
+   --------------------------------------------------------------------------
+   设计基准 : 沿用海报自身的四色印刷体系（奶油纸/近黑/砖红/钴蓝）
+   画布规格 : 每张海报固定 720×1020，通过 --k 等比缩放适配任意屏幕
+   切换逻辑 : 三通道并行 —— 滚轮 / 拖拽滑动(Pointer Events 统一鼠标+触摸) / 按键
+   动效基调 : 印刷品"推送"式横向位移 + 轻微景深收敛，缓动 cubic-bezier(.72,0,.24,1)
+              （该曲线起止近乎静止、中段果断，接近印刷机送纸的机械感，
+                不论断、不弹跳，与海报的冷静调性一致）
+   ========================================================================== */
+*{box-sizing:border-box;}
+:root{
+  --cream:#EDE4D2;
+  --ink:#17140F;
+  --red:#C33A28;
+  --blue:#1F4C9E;
+
+  --k:1;                                   /* 海报等比缩放系数 */
+  --ease:cubic-bezier(.72,0,.24,1);        /* 主缓动 */
+  --dur:860ms;                             /* 主位移时长 */
+  --fade:640ms;                            /* 透明度时长 */
+  --line:rgba(237,228,210,.20);
+  --line-2:rgba(237,228,210,.42);
+}
+html,body{height:100%;}
+body{
+  margin:0;overflow:hidden;
+  background:#5E5852;
+  background-image:radial-gradient(circle at 50% 40%,#7A746B 0%,#565049 58%,#3A3632 100%);
+  color:var(--cream);
+  font-family:"Helvetica Neue",Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;
+  overscroll-behavior:none;
+  user-select:none;-webkit-user-select:none;
+}
+
+/* ---------- 舞台与幻灯片 ---------- */
+.stage{position:fixed;inset:0;overflow:hidden;touch-action:none;cursor:grab;}
+.stage.dragging{cursor:grabbing;}
+
+.slide{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  will-change:transform,opacity;
+  transition:transform var(--dur) var(--ease),
+             opacity var(--fade) var(--ease);
+  transform:translate3d(0,0,0) scale(1);
+  opacity:1;
+}
+.slide:not(.is-active){pointer-events:none;}
+/* 向前：当前页左移缩小淡出，下一页自右侧推入 —— 反向自动镜像 */
+.slide.is-prev{transform:translate3d(-7%,0,0) scale(.93);opacity:0;}
+.slide.is-next{transform:translate3d(7%,0,0) scale(.93);opacity:0;}
+
+/* ---------- 海报等比容器 ---------- */
+.poster-fit{
+  position:relative;width:720px;height:1020px;flex:0 0 auto;
+  transform:scale(var(--k));transform-origin:center center;
+  isolation:isolate;
+  box-shadow:0 34px 72px rgba(0,0,0,.46),0 3px 0 rgba(255,255,255,.05) inset;
+}
+
+/* ---------- 海报内部（与 posters.html 完全一致的设计语言） ---------- */
+.poster{position:absolute;inset:0;overflow:hidden;background:var(--cream);color:var(--ink);isolation:isolate;}
+.poster.dark{background:var(--ink);color:var(--cream);}
+.a{position:absolute;}
+p.a{margin:0;}
+.tt{font-family:"Arial Narrow","Helvetica Neue",Helvetica,Arial,sans-serif;font-weight:700;letter-spacing:-.004em;}
+.lbl{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.02em;}
+.mono{font-family:Consolas,"SFMono-Regular",ui-monospace,monospace;text-transform:uppercase;letter-spacing:.01em;}
+.rule{background:currentColor;}
+.grain{position:absolute;inset:0;pointer-events:none;opacity:.3;mix-blend-mode:multiply;}
+
+/* ---------- 全局统一质感：胶片噪点 + 暗角 ---------- */
+.veil{position:fixed;inset:0;pointer-events:none;z-index:40;}
+.veil .dots{
+  position:absolute;inset:0;opacity:.055;mix-blend-mode:overlay;
+  background-image:radial-gradient(rgba(255,255,255,.9) .5px,transparent .5px);
+  background-size:3px 3px;
+}
+.veil .vig{
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 46%,transparent 42%,rgba(0,0,0,.30) 100%);
+}
+
+/* ---------- 顶部信息条 ---------- */
+.topbar{
+  position:fixed;left:0;right:0;top:0;z-index:30;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:22px 30px;pointer-events:none;
+  font-size:10.5px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;
+  color:rgba(237,228,210,.62);
+}
+.topbar .tb-r{font-family:"Arial Narrow",Arial,sans-serif;letter-spacing:.1em;font-size:12px;}
+.topbar .tb-r b{color:var(--cream);font-size:15px;}
+
+/* ---------- 前后切换按钮（左右两侧） ---------- */
+.edge{
+  position:fixed;top:50%;z-index:30;margin-top:-28px;
+  width:56px;height:56px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);background:rgba(23,20,15,.16);
+  color:var(--cream);cursor:pointer;padding:0;
+  opacity:.5;
+  transition:opacity .4s var(--ease),background .4s var(--ease),
+             border-color .4s var(--ease),transform .4s var(--ease);
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+}
+.edge:hover{opacity:1;background:rgba(237,228,210,.10);border-color:var(--line-2);}
+.edge.prev{left:26px;}
+.edge.next{right:26px;}
+.edge.prev:hover{transform:translateX(-3px);}
+.edge.next:hover{transform:translateX(3px);}
+.edge[disabled]{opacity:.14;cursor:default;}
+.edge[disabled]:hover{transform:none;background:rgba(23,20,15,.16);border-color:var(--line);}
+.edge svg{width:16px;height:16px;}
+
+/* ---------- 底部信息台 ---------- */
+.dock{
+  position:fixed;left:0;right:0;bottom:0;z-index:30;
+  padding:0 30px calc(20px + env(safe-area-inset-bottom));
+  pointer-events:none;
+}
+.dock::before{ /* 底部渐隐，保证文字始终可读 */
+  content:'';position:absolute;left:0;right:0;bottom:0;height:190px;
+  background:linear-gradient(to top,rgba(20,18,15,.66),rgba(20,18,15,0));
+  pointer-events:none;
+}
+.dock-in{
+  position:relative;display:flex;align-items:flex-end;justify-content:space-between;
+  gap:20px;padding-bottom:18px;
+}
+.meta{display:flex;align-items:baseline;gap:14px;min-width:0;}
+.meta .idx{
+  font-family:"Arial Narrow",Arial,sans-serif;font-weight:700;
+  font-size:46px;line-height:.82;letter-spacing:-.01em;color:var(--cream);
+}
+.meta .txt{display:flex;flex-direction:column;gap:5px;min-width:0;}
+.meta .mt-title{
+  font-family:"Arial Narrow",Arial,sans-serif;font-weight:700;
+  font-size:17px;letter-spacing:.16em;text-transform:uppercase;color:var(--cream);
+}
+.meta .mt-sub{
+  font-style:normal;font-size:10.5px;letter-spacing:.14em;color:rgba(237,228,210,.58);
+}
+/* 切换时信息台轻微上浮，呼应海报的印刷位移 */
+.meta.swap .idx,.meta.swap .txt{animation:metaIn 560ms var(--ease) both;}
+@keyframes metaIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+
+/* ---------- 底部进度轨（8 段，可点击） ---------- */
+.rail{
+  position:absolute;left:30px;right:30px;bottom:0;height:14px;
+  display:flex;align-items:center;gap:4px;pointer-events:auto;
+}
+.rail button{
+  flex:1;height:3px;padding:0;border:0;cursor:pointer;
+  background:rgba(237,228,210,.20);
+  transition:background .45s var(--ease),height .45s var(--ease);
+}
+.rail button:hover{background:rgba(237,228,210,.55);height:5px;}
+.rail button.on{background:var(--cream);height:5px;}
+
+/* ---------- 首次进入提示 ---------- */
+.hint{
+  position:fixed;left:50%;bottom:96px;z-index:30;transform:translateX(-50%);
+  font-size:10.5px;letter-spacing:.26em;text-transform:uppercase;
+  color:rgba(237,228,210,.55);white-space:nowrap;
+  transition:opacity .6s var(--ease),transform .6s var(--ease);
+  pointer-events:none;
+}
+.hint.off{opacity:0;transform:translateX(-50%) translateY(8px);}
+
+/* ---------- 窄屏适配 ---------- */
+@media (max-width:820px){
+  .topbar{padding:16px 18px;}
+  .dock{padding:0 18px calc(16px + env(safe-area-inset-bottom));}
+  .rail{left:18px;right:18px;}
+  .edge{width:44px;height:44px;margin-top:-22px;}
+  .edge.prev{left:10px;} .edge.next{right:10px;}
+  .meta .idx{font-size:34px;}
+  .meta .mt-title{font-size:14px;letter-spacing:.12em;}
+  .meta .mt-sub{font-size:9.5px;}
+  .hint{bottom:84px;}
+}
+@media (max-width:520px){
+  .edge{opacity:.36;}
+  .meta .mt-sub{display:none;}
+}
+
+/* ---------- 无障碍：尊重系统减弱动效设置 ---------- */
+@media (prefers-reduced-motion:reduce){
+  :root{--dur:320ms;--fade:240ms;}
+  .meta.swap .idx,.meta.swap .txt{animation-duration:1ms;}
+}
+</style>
+</head>
+<body>
+
+<!-- 全局滤镜 / 渐变定义 -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="grainF" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <radialGradient id="sphereG" cx="36%" cy="32%" r="72%">
+      <stop offset="0%" stop-color="#E47456"/>
+      <stop offset="52%" stop-color="#C33A28"/>
+      <stop offset="100%" stop-color="#7C2217"/>
+    </radialGradient>
+  </defs>
+</svg>
+
+<!-- 舞台：八张海报各自一个全屏容器 -->
+<main class="stage" id="stage">
+
+  <section class="slide" data-i="0"><div class="poster-fit"><div class="poster p1">
+
+    <!-- 标题：整行撑满 -->
+    <svg class="a" style="left:20px;top:16px;width:680px;height:152px" viewBox="0 0 680 152">
+      <text class="tt" x="0" y="144" font-size="146" fill="#17140F" textLength="680" lengthAdjust="spacingAndGlyphs">HOME SIGNAL</text>
+    </svg>
+
+    <!-- 蓝色外框 + 黑色内板 -->
+    <div class="a rule" style="left:20px;top:186px;width:680px;height:572px;background:#1F4C9E"></div>
+    <div class="a" style="left:34px;top:200px;width:652px;height:544px;background:#17140F"></div>
+
+    <!-- VHS 巨型字 -->
+    <svg class="a" style="left:44px;top:250px;width:420px;height:480px" viewBox="0 0 420 480">
+      <text class="tt" x="0" y="478" font-size="664" fill="#EDE4D2" textLength="420" lengthAdjust="spacingAndGlyphs">VHS</text>
+    </svg>
+
+    <!-- 磁带卷盘 -->
+    <svg class="a" style="left:440px;top:368px;width:246px;height:246px" viewBox="0 0 246 246">
+      <circle cx="123" cy="123" r="123" fill="#EDE4D2"/>
+      <circle cx="123" cy="123" r="64" fill="#17140F"/>
+      <g fill="#EDE4D2">
+        <rect x="112" y="60" width="22" height="40" transform="rotate(0 123 123)"/>
+        <rect x="112" y="60" width="22" height="40" transform="rotate(60 123 123)"/>
+        <rect x="112" y="60" width="22" height="40" transform="rotate(120 123 123)"/>
+        <rect x="112" y="60" width="22" height="40" transform="rotate(180 123 123)"/>
+        <rect x="112" y="60" width="22" height="40" transform="rotate(240 123 123)"/>
+        <rect x="112" y="60" width="22" height="40" transform="rotate(300 123 123)"/>
+      </g>
+      <circle cx="123" cy="123" r="22" fill="#17140F"/>
+      <circle cx="123" cy="123" r="8" fill="#EDE4D2"/>
+    </svg>
+
+    <!-- 底部刻度线 + 三个圆点 -->
+    <svg class="a" style="left:44px;top:616px;width:270px;height:104px" viewBox="0 0 270 104">
+      <g fill="#EDE4D2">
+        <circle cx="30" cy="14" r="8"/>
+        <circle cx="30" cy="50" r="8"/>
+        <circle cx="30" cy="86" r="8"/>
+      </g>
+      <g fill="#EDE4D2">
+        <rect x="78" y="2" width="180" height="5"/>
+        <rect x="78" y="15" width="180" height="5"/>
+        <rect x="78" y="28" width="180" height="5"/>
+        <rect x="78" y="41" width="180" height="5"/>
+        <rect x="78" y="54" width="180" height="5"/>
+        <rect x="78" y="67" width="180" height="5"/>
+        <rect x="78" y="80" width="150" height="5"/>
+        <rect x="78" y="93" width="120" height="5"/>
+      </g>
+    </svg>
+
+    <!-- 底部红带 -->
+    <div class="a" style="left:0;top:772px;width:720px;height:248px;background:#C33A28"></div>
+    <div class="a lbl" style="left:34px;top:794px;font-size:20px;letter-spacing:.17em;color:#EDE4D2;border-bottom:2px solid #EDE4D2;padding-bottom:7px;">VIDEO SYSTEM</div>
+    <svg class="a" style="left:30px;top:852px;width:250px;height:118px" viewBox="0 0 250 118">
+      <text class="tt" x="0" y="116" font-size="160" fill="#EDE4D2" textLength="250" lengthAdjust="spacingAndGlyphs">1978</text>
+    </svg>
+    <p class="a lbl" style="left:352px;top:788px;width:318px;font-size:11.5px;line-height:1.48;color:#EDE4D2;">
+      HOME SIGNAL IS A NEW VIDEO SYSTEM DESIGNED FOR THE HOME. BEYOND THE POWER OF VIDEO
+      RECORDING AND PLAYBACK INTO YOUR LIVING ROOM. RECORD WHAT YOU LOVE. WATCH WHAT YOU WANT.
+      THIS IS HOME VIDEO.
+    </p>
+    <svg class="a" style="left:512px;top:926px;width:178px;height:74px" viewBox="0 0 178 74">
+      <g fill="none" stroke="#EDE4D2" stroke-width="2.4" stroke-linecap="round">
+        <path d="M4,20 C26,20 26,6 48,6 C70,6 70,20 92,20 C114,20 114,6 136,6 C158,6 158,20 176,20"/>
+        <path d="M4,38 C26,38 26,24 48,24 C70,24 70,38 92,38 C114,38 114,24 136,24 C158,24 158,38 176,38"/>
+        <path d="M4,56 C26,56 26,42 48,42 C70,42 70,56 92,56 C114,56 114,42 136,42 C158,42 158,56 176,56"/>
+      </g>
+    </svg>
+
+    <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
+  <section class="slide" data-i="1"><div class="poster-fit"><div class="poster dark p2">
+
+    <svg class="a" style="left:20px;top:14px;width:680px;height:122px" viewBox="0 0 680 122">
+      <text class="tt" x="0" y="116" font-size="118" fill="#EDE4D2" textLength="680" lengthAdjust="spacingAndGlyphs">PLAYER ONE</text>
+    </svg>
+    <p class="a lbl" style="left:24px;top:150px;width:252px;font-size:10.5px;line-height:1.4;color:#EDE4D2;">
+      AN ANALOG ARCADE SYSTEM DOCUMENTING JOYSTICK INPUT AND CONTROL SIGNAL FLOW.
+    </p>
+
+    <!-- 01 -->
+    <svg class="a" style="left:20px;top:196px;width:250px;height:272px" viewBox="0 0 250 272">
+      <text class="tt" x="0" y="270" font-size="378" fill="#EDE4D2" textLength="250" lengthAdjust="spacingAndGlyphs">01</text>
+    </svg>
+
+    <!-- 信号连线 -->
+    <svg class="a" style="left:0;top:0;width:720px;height:1020px;pointer-events:none" viewBox="0 0 720 1020">
+      <path d="M412,468 C356,516 300,470 232,516" fill="none" stroke="#1F4C9E" stroke-width="15" stroke-linecap="round"/>
+      <path d="M474,494 C452,568 402,600 330,594" fill="none" stroke="#C33A28" stroke-width="15" stroke-linecap="round"/>
+    </svg>
+
+    <!-- 摇杆 -->
+    <svg class="a" style="left:330px;top:110px;width:360px;height:380px" viewBox="0 0 360 380">
+      <polygon points="42,258 282,222 340,272 100,310" fill="#EDE4D2"/>
+      <polygon points="100,310 340,272 340,300 100,338" fill="#CDC2AB"/>
+      <circle cx="62" cy="252" r="6" fill="#17140F"/>
+      <circle cx="264" cy="219" r="6" fill="#17140F"/>
+      <circle cx="322" cy="277" r="6" fill="#17140F"/>
+      <circle cx="118" cy="308" r="6" fill="#17140F"/>
+      <ellipse cx="190" cy="252" rx="104" ry="40" fill="#17140F"/>
+      <ellipse cx="190" cy="246" rx="98" ry="37" fill="#EDE4D2"/>
+      <ellipse cx="190" cy="228" rx="84" ry="32" fill="#17140F"/>
+      <ellipse cx="190" cy="222" rx="78" ry="29" fill="#EDE4D2"/>
+      <ellipse cx="190" cy="204" rx="62" ry="24" fill="#17140F"/>
+      <ellipse cx="190" cy="198" rx="56" ry="21" fill="#EDE4D2"/>
+      <ellipse cx="190" cy="180" rx="40" ry="15" fill="#17140F"/>
+      <ellipse cx="190" cy="175" rx="34" ry="13" fill="#EDE4D2"/>
+      <rect x="172" y="70" width="36" height="126" fill="#EDE4D2" stroke="#17140F" stroke-width="3"/>
+      <circle cx="190" cy="66" r="60" fill="#C33A28"/>
+      <circle cx="167" cy="40" r="14" fill="#EDE4D2" opacity=".9"/>
+    </svg>
+
+    <!-- 靶心 -->
+    <svg class="a" style="left:105px;top:400px;width:250px;height:250px" viewBox="0 0 250 250">
+      <circle cx="125" cy="125" r="122" fill="#1F4C9E"/>
+      <circle cx="125" cy="125" r="95" fill="#EDE4D2"/>
+      <circle cx="125" cy="125" r="78" fill="#C33A28"/>
+      <circle cx="125" cy="125" r="50" fill="#EDE4D2"/>
+      <circle cx="125" cy="125" r="20" fill="#C33A28"/>
+      <circle cx="125" cy="125" r="7" fill="#EDE4D2"/>
+    </svg>
+
+    <!-- 图例 -->
+    <div class="a lbl" style="left:505px;top:548px;width:205px;font-size:9.5px;line-height:2.05;color:#EDE4D2;">
+      <div style="display:flex;align-items:center;gap:8px"><i style="width:9px;height:9px;background:#C33A28;display:block"></i>X-AXIS SIGNAL</div>
+      <div style="display:flex;align-items:center;gap:8px"><i style="width:9px;height:9px;background:#1F4C9E;display:block"></i>Y-AXIS SIGNAL</div>
+      <div style="display:flex;align-items:center;gap:8px"><i style="width:9px;height:9px;background:#EDE4D2;display:block"></i>GROUND REFERENCE</div>
+    </div>
+    <p class="a lbl" style="left:505px;top:634px;width:205px;font-size:9.5px;line-height:1.5;color:#EDE4D2;">
+      THE JOYSTICK TRANSLATES PHYSICAL MOVEMENT INTO ANALOG VOLTAGE SIGNALS. THESE SIGNALS ARE
+      PROCESSED AND INTERPRETED BY THE ARCADE SYSTEM'S MAIN CIRCUIT BOARD.
+    </p>
+
+    <!-- 底部红带 -->
+    <div class="a" style="left:0;top:700px;width:720px;height:320px;background:#C33A28"></div>
+    <svg class="a" style="left:28px;top:710px;width:352px;height:182px" viewBox="0 0 352 182">
+      <text class="tt" x="0" y="88" font-size="124" fill="#EDE4D2" textLength="352" lengthAdjust="spacingAndGlyphs">CONTROL</text>
+      <text class="tt" x="0" y="178" font-size="124" fill="#EDE4D2" textLength="352" lengthAdjust="spacingAndGlyphs">SIGNAL</text>
+    </svg>
+    <svg class="a" style="left:28px;top:902px;width:114px;height:60px" viewBox="0 0 114 60">
+      <text class="tt" x="0" y="58" font-size="82" fill="#EDE4D2" textLength="114" lengthAdjust="spacingAndGlyphs">1979</text>
+    </svg>
+    <div class="a lbl" style="left:152px;top:908px;font-size:10px;line-height:1.5;color:#EDE4D2;">
+      BUILT FOR ARCADES.<br>MADE FOR PLAY.
+    </div>
+
+    <!-- 电压波形 -->
+    <svg class="a" style="left:428px;top:706px;width:256px;height:96px" viewBox="0 0 256 96">
+      <line x1="30" y1="4" x2="30" y2="88" stroke="#EDE4D2" stroke-width="1.6"/>
+      <line x1="0" y1="88" x2="254" y2="88" stroke="#EDE4D2" stroke-width="1.6"/>
+      <g class="lbl" font-size="9" fill="#EDE4D2">
+        <text x="4" y="10">10V</text><text x="4" y="34">5V</text>
+      </g>
+      <path d="M30,62 C58,62 58,24 86,24 C114,24 114,62 142,62 C170,62 170,24 198,24 C220,24 232,38 254,42"
+            fill="none" stroke="#1F4C9E" stroke-width="3"/>
+      <path d="M30,74 C58,74 58,48 86,48 C114,48 114,74 142,74 C170,74 170,48 198,48 C220,48 232,58 254,60"
+            fill="none" stroke="#C33A28" stroke-width="3"/>
+    </svg>
+
+    <!-- 信号流程 -->
+    <svg class="a" style="left:388px;top:838px;width:314px;height:58px" viewBox="0 0 314 58">
+      <g fill="none" stroke="#EDE4D2" stroke-width="2">
+        <rect x="1" y="9" width="88" height="40"/>
+        <rect x="122" y="9" width="88" height="40"/>
+        <rect x="243" y="9" width="70" height="40"/>
+      </g>
+      <g class="lbl" font-size="9.5" fill="#EDE4D2" text-anchor="middle">
+        <text x="45" y="25">JOYSTICK</text><text x="45" y="38">INPUT</text>
+        <text x="166" y="25">ANALOG</text><text x="166" y="38">PROCESSOR</text>
+        <text x="278" y="25">GAME</text><text x="278" y="38">LOGIC</text>
+      </g>
+      <g fill="#EDE4D2">
+        <path d="M92,29 L120,29 L120,25 L131,29 L120,33 L120,29 Z"/>
+        <path d="M213,29 L241,29 L241,25 L252,29 L241,33 L241,29 Z"/>
+      </g>
+    </svg>
+
+    <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
+  <section class="slide" data-i="2"><div class="poster-fit"><div class="poster dark p3">
+
+    <svg class="a" style="left:20px;top:16px;width:680px;height:190px" viewBox="0 0 680 190">
+      <text class="tt" x="0" y="100" font-size="118" fill="#EDE4D2" textLength="680" lengthAdjust="spacingAndGlyphs">EXPRESS</text>
+      <text class="tt" x="0" y="186" font-size="118" fill="#EDE4D2" textLength="680" lengthAdjust="spacingAndGlyphs">CITY</text>
+    </svg>
+
+    <!-- 72 -->
+    <svg class="a" style="left:20px;top:228px;width:242px;height:252px" viewBox="0 0 242 252">
+      <text class="tt" x="0" y="250" font-size="350" fill="#EDE4D2" textLength="242" lengthAdjust="spacingAndGlyphs">72</text>
+    </svg>
+
+    <!-- 地铁线路图 -->
+    <svg class="a" style="left:0;top:0;width:720px;height:1020px;pointer-events:none" viewBox="0 0 720 1020">
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="11">
+        <path d="M46,520 L344,520 L456,432 L480,312 L640,248" stroke="#1F4C9E"/>
+        <path d="M62,634 L250,634 L344,520" stroke="#C33A28"/>
+      </g>
+      <g stroke-width="9" fill="#EDE4D2">
+        <circle cx="46" cy="520" r="23" stroke="#1F4C9E"/>
+        <circle cx="344" cy="520" r="23" stroke="#1F4C9E"/>
+        <circle cx="456" cy="432" r="21" stroke="#1F4C9E"/>
+        <circle cx="480" cy="312" r="19" stroke="#1F4C9E"/>
+        <circle cx="640" cy="248" r="21" stroke="#1F4C9E"/>
+        <circle cx="62" cy="634" r="21" stroke="#C33A28"/>
+        <circle cx="250" cy="634" r="23" stroke="#C33A28"/>
+      </g>
+    </svg>
+
+    <!-- 北环 / 南线 说明 -->
+    <div class="a lbl" style="left:428px;top:150px;width:268px;">
+      <div style="font-size:11px;letter-spacing:.1em;color:#EDE4D2;">■ NORTH LOOP</div>
+      <p style="margin:3px 0 0;font-size:9.5px;line-height:1.5;color:#EDE4D2;">
+        THE UNITED CITY 72 CONNECTS THE NORTH LOOP TO THE SOUTH LINE, WITH KEY TRANSFER POINTS ACROSS THE METROPOLIS.
+      </p>
+    </div>
+    <div class="a lbl" style="left:566px;top:452px;width:140px;">
+      <div style="font-size:11px;letter-spacing:.1em;color:#EDE4D2;">■ SOUTH LINE</div>
+      <p style="margin:3px 0 0;font-size:9.5px;line-height:1.5;color:#EDE4D2;">
+        FREIGHT TRANSIT THROUGH THE HEART OF THE CITY.
+      </p>
+    </div>
+
+    <!-- 仪表盘 -->
+    <svg class="a" style="left:430px;top:520px;width:250px;height:250px" viewBox="0 0 250 250">
+      <path d="M125,125 L125,5 A120,120 0 0,1 231,65 Z" fill="#C33A28"/>
+      <circle cx="125" cy="125" r="120" fill="none" stroke="#EDE4D2" stroke-width="3"/>
+      <circle cx="125" cy="125" r="88" fill="none" stroke="#EDE4D2" stroke-width="2"/>
+      <circle cx="125" cy="125" r="56" fill="none" stroke="#EDE4D2" stroke-width="2"/>
+      <line x1="5" y1="125" x2="245" y2="125" stroke="#EDE4D2" stroke-width="2"/>
+      <line x1="125" y1="5" x2="125" y2="245" stroke="#EDE4D2" stroke-width="2"/>
+      <circle cx="125" cy="125" r="8" fill="#EDE4D2"/>
+      <circle cx="250" cy="125" r="15" fill="#C33A28"/>
+    </svg>
+
+    <!-- 列车 -->
+    <svg class="a" style="left:0;top:600px;width:290px;height:130px" viewBox="0 0 290 130">
+      <path d="M0,96 L228,96 L262,74 L228,74 Z" fill="#C33A28"/>
+      <path d="M6,34 C40,16 92,6 150,6 L214,6 C238,6 252,16 258,30 L262,44 L8,44 Z" fill="#EDE4D2"/>
+      <rect x="10" y="20" width="200" height="12" rx="6" fill="#17140F" opacity=".85"/>
+      <path d="M218,10 C238,12 250,20 256,34 L262,44 L214,44 Z" fill="#CFC4AE"/>
+      <g fill="#17140F">
+        <rect x="30" y="48" width="26" height="14" rx="5"/><rect x="72" y="48" width="26" height="14" rx="5"/>
+        <rect x="114" y="48" width="26" height="14" rx="5"/><rect x="156" y="48" width="26" height="14" rx="5"/>
+      </g>
+    </svg>
+
+    <!-- 右下半块红条 -->
+    <div class="a" style="left:200px;top:730px;width:520px;height:96px;background:#C33A28"></div>
+
+    <!-- 底部信息 -->
+    <div class="a lbl" style="left:34px;top:856px;font-size:13px;line-height:1.55;color:#EDE4D2;">
+      ALL STOPS<br>ALL DAY<br>EVERY DAY
+    </div>
+    <div class="a lbl" style="left:166px;top:856px;font-size:10px;line-height:1.9;color:#EDE4D2;">
+      <div style="display:flex;align-items:center;gap:8px"><i style="width:34px;height:4px;background:#1F4C9E;display:block"></i>NORTH LOOP</div>
+      <div style="display:flex;align-items:center;gap:8px"><i style="width:34px;height:4px;background:#C33A28;display:block"></i>SOUTH LINE</div>
+      <div style="font-size:12px;letter-spacing:.1em;">EXPRESS CITY 72</div>
+    </div>
+
+    <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
+  <section class="slide" data-i="3"><div class="poster-fit"><div class="poster p4">
+
+    <svg class="a" style="left:20px;top:16px;width:680px;height:120px" viewBox="0 0 680 120">
+      <text class="tt" x="0" y="114" font-size="116" fill="#17140F" textLength="680" lengthAdjust="spacingAndGlyphs">CHANNEL ZERO</text>
+    </svg>
+    <div class="a lbl" style="left:24px;top:148px;font-size:10.5px;letter-spacing:.15em;border-bottom:2px solid #17140F;padding-bottom:6px;">
+      FIRST TRANSMISSION
+    </div>
+
+    <!-- 电波 + 铁塔 -->
+    <svg class="a" style="left:0;top:0;width:720px;height:1020px;pointer-events:none" viewBox="0 0 720 1020">
+      <!-- 两个蓝色波瓣 -->
+      <circle cx="164" cy="462" r="150" fill="#1F4C9E"/>
+      <circle cx="164" cy="462" r="94" fill="#EDE4D2"/>
+      <circle cx="566" cy="462" r="150" fill="#1F4C9E"/>
+      <circle cx="566" cy="462" r="94" fill="#EDE4D2"/>
+      <!-- 同心电波 -->
+      <g fill="none" stroke="#17140F" stroke-width="1.8">
+        <circle cx="352" cy="262" r="36"/><circle cx="352" cy="262" r="58"/>
+        <circle cx="352" cy="262" r="80"/><circle cx="352" cy="262" r="102"/>
+        <circle cx="352" cy="262" r="124"/><circle cx="352" cy="262" r="146"/>
+      </g>
+      <circle cx="352" cy="262" r="7.5" fill="#C33A28"/>
+      <!-- 塔身 -->
+      <g stroke="#17140F" fill="none" stroke-width="5">
+        <path d="M352,268 L268,650 M352,268 L436,650"/>
+      </g>
+      <g stroke="#17140F" fill="none" stroke-width="3.4">
+        <path d="M340,310 L364,310 M328,370 L376,370 M313,430 L391,430 M299,490 L405,490 M284,550 L420,550 M270,610 L434,610"/>
+        <path d="M340,310 L376,370 L328,430 L391,490 L299,550 L405,610"/>
+      </g>
+    </svg>
+
+    <!-- 左侧黑色条码块 -->
+    <svg class="a" style="left:34px;top:612px;width:200px;height:72px" viewBox="0 0 200 72">
+      <g fill="#17140F">
+        <rect x="0" y="0" width="186" height="6"/><rect x="0" y="11" width="176" height="6"/>
+        <rect x="0" y="22" width="186" height="6"/><rect x="0" y="33" width="168" height="6"/>
+        <rect x="0" y="44" width="186" height="6"/><rect x="0" y="55" width="150" height="6"/>
+        <rect x="0" y="66" width="120" height="6"/>
+      </g>
+    </svg>
+
+    <!-- 右侧说明 -->
+    <p class="a lbl" style="left:506px;top:588px;width:200px;font-size:9.5px;line-height:1.5;color:#17140F;">
+      CHANNEL ZERO COMMENCED BROADCASTING ON THIS DAY, MARKING THE BEGINNING OF A NEW ERA IN
+      EXPERIMENTAL TELEVISION. TRANSMITTING FROM AN UNDISCLOSED LOCATION. THE SIGNAL REACHED A SMALL
+      BUT PROMISING AUDIENCE. THIS IS THE FIRST TRANSMISSION.
+    </p>
+
+    <!-- 底部红带 -->
+    <div class="a" style="left:0;top:812px;width:720px;height:208px;background:#C33A28"></div>
+    <svg class="a" style="left:30px;top:846px;width:192px;height:64px" viewBox="0 0 192 64">
+      <text class="tt" x="0" y="62" font-size="86" fill="#EDE4D2" textLength="192" lengthAdjust="spacingAndGlyphs">1976</text>
+    </svg>
+    <svg class="a" style="left:600px;top:836px;width:96px;height:96px" viewBox="0 0 96 96">
+      <g fill="none" stroke="#EDE4D2" stroke-width="3.4">
+        <circle cx="48" cy="48" r="44"/><circle cx="48" cy="48" r="33"/>
+        <circle cx="48" cy="48" r="22"/><circle cx="48" cy="48" r="11"/>
+      </g>
+      <circle cx="48" cy="48" r="4.5" fill="#EDE4D2"/>
+    </svg>
+
+    <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
+  <section class="slide" data-i="4"><div class="poster-fit"><div class="poster dark p5">
+
+    <svg class="a" style="left:20px;top:16px;width:680px;height:190px" viewBox="0 0 680 190">
+      <text class="tt" x="0" y="100" font-size="118" fill="#EDE4D2" textLength="680" lengthAdjust="spacingAndGlyphs">DEEP</text>
+      <text class="tt" x="0" y="186" font-size="118" fill="#EDE4D2" textLength="680" lengthAdjust="spacingAndGlyphs">ORBIT</text>
+    </svg>
+    <div class="a lbl" style="left:24px;top:210px;font-size:11px;letter-spacing:.13em;color:#C33A28;">FIELD RECORD 03</div>
+
+    <!-- 行星 + 轨道 -->
+    <svg class="a" style="left:0;top:0;width:720px;height:1020px;pointer-events:none" viewBox="0 0 720 1020">
+      <g fill="none" stroke-width="3.4">
+        <path d="M-40,660 C140,430 420,318 760,300" stroke="#1F4C9E"/>
+        <path d="M60,470 C240,300 470,250 700,262" stroke="#1F4C9E" stroke-dasharray="9 9" opacity=".85"/>
+      </g>
+      <circle cx="352" cy="474" r="196" fill="#EDE4D2"/>
+      <circle cx="572" cy="452" r="104" fill="url(#sphereG)"/>
+      <circle cx="510" cy="392" r="34" fill="#EDE4D2" opacity=".16"/>
+      <!-- 卫星 -->
+      <g transform="translate(62,356)">
+        <rect x="0" y="16" width="34" height="26" fill="#EDE4D2"/>
+        <rect x="-30" y="20" width="26" height="16" fill="#EDE4D2" opacity=".85"/>
+        <rect x="38" y="20" width="26" height="16" fill="#EDE4D2" opacity=".85"/>
+        <path d="M34,29 L38,29" stroke="#EDE4D2" stroke-width="2"/>
+      </g>
+    </svg>
+
+    <!-- 03 -->
+    <svg class="a" style="left:16px;top:552px;width:248px;height:184px" viewBox="0 0 248 184">
+      <text class="tt" x="0" y="182" font-size="256" fill="#EDE4D2" textLength="248" lengthAdjust="spacingAndGlyphs">03</text>
+    </svg>
+
+    <!-- 底部红带 -->
+    <div class="a" style="left:0;top:748px;width:720px;height:272px;background:#C33A28"></div>
+    <svg class="a" style="left:30px;top:770px;width:122px;height:122px" viewBox="0 0 122 122">
+      <g fill="none" stroke="#17140F" stroke-width="2.2">
+        <circle cx="61" cy="61" r="52"/><circle cx="61" cy="61" r="34"/><circle cx="61" cy="61" r="16"/>
+        <line x1="0" y1="61" x2="122" y2="61"/><line x1="61" y1="0" x2="61" y2="122"/>
+      </g>
+      <circle cx="61" cy="61" r="6" fill="#17140F"/>
+    </svg>
+    <p class="a lbl" style="left:172px;top:772px;width:214px;font-size:9.5px;line-height:1.5;color:#EDE4D2;">
+      A DOCUMENTARY EXPLORING THE SILENT PATHS BEYOND THE KNOWN. CAPTURED ON ANALOG FILM.
+      GUIDED BY CURIOSITY. DRIVEN BY DISTANCE.
+    </p>
+    <svg class="a" style="left:444px;top:794px;width:200px;height:82px" viewBox="0 0 200 82">
+      <text class="tt" x="0" y="80" font-size="112" fill="#17140F" textLength="200" lengthAdjust="spacingAndGlyphs">1977</text>
+    </svg>
+    <g class="a" style="left:444px;top:900px;width:200px;">
+      <div class="rule" style="height:5px;margin-bottom:6px;color:#17140F"></div>
+      <div class="rule" style="height:5px;margin-bottom:6px;color:#17140F"></div>
+      <div class="rule" style="height:5px;margin-bottom:6px;color:#17140F"></div>
+      <div class="rule" style="height:5px;color:#17140F"></div>
+    </g>
+
+    <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
+  <section class="slide" data-i="5"><div class="poster-fit"><div class="poster p6">
+
+    <!-- 左侧黑色信息板 -->
+    <div class="a" style="left:0;top:0;width:330px;height:640px;background:#17140F"></div>
+
+    <svg class="a" style="left:24px;top:30px;width:290px;height:150px" viewBox="0 0 290 150">
+      <text class="tt" x="0" y="78" font-size="96" fill="#1F4C9E" textLength="290" lengthAdjust="spacingAndGlyphs">VELOCITY</text>
+      <text class="tt" x="0" y="146" font-size="96" fill="#1F4C9E" textLength="290" lengthAdjust="spacingAndGlyphs">TEST</text>
+    </svg>
+    <p class="a lbl" style="left:24px;top:180px;width:266px;font-size:10px;line-height:1.55;color:#EDE4D2;">
+      RESEARCH VEHICLE 06<br>HIGH-SPEED AERODYNAMICS STUDY<br>MAXIMUM VELOCITY PROTOCOL
+    </p>
+    <div class="a lbl" style="left:24px;top:250px;font-size:9px;letter-spacing:.16em;color:#EDE4D2;">SPECIMEN</div>
+
+    <!-- 90 -->
+    <svg class="a" style="left:20px;top:292px;width:246px;height:258px" viewBox="0 0 246 258">
+      <text class="tt" x="0" y="256" font-size="358" fill="#EDE4D2" textLength="246" lengthAdjust="spacingAndGlyphs">90</text>
+    </svg>
+
+    <!-- 参数表 -->
+    <div class="a mono" style="left:24px;top:592px;width:158px;border:1.5px solid #EDE4D2;padding:9px 10px;font-size:8.5px;line-height:1.62;color:#EDE4D2;">
+      LENGTH: 8.4 M<br>DIAMETER: 0.6 M<br>MASS: 1,200 KG<br>PAYLOAD: 250 KG<br>GUIDANCE: INERTIAL<br>VECTORING: NONE<br>STATUS: ACTIVE
+    </div>
+
+    <!-- 火箭 + 速度线 -->
+    <svg class="a" style="left:180px;top:96px;width:520px;height:560px" viewBox="0 0 520 560">
+      <defs>
+        <linearGradient id="jetG" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0%" stop-color="#1F4C9E" stop-opacity=".85"/>
+          <stop offset="100%" stop-color="#1F4C9E" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <!-- 速度斜线 -->
+      <g stroke="#1F4C9E" stroke-width="6" stroke-linecap="round">
+        <path d="M-40,540 L150,190"/><path d="M30,560 L230,196"/><path d="M-70,470 L120,140"/>
+        <path d="M120,570 L330,220"/><path d="M-30,360 L60,220"/>
+      </g>
+      <g stroke="#17140F" stroke-width="3" stroke-linecap="round">
+        <path d="M-60,570 L170,180"/><path d="M80,580 L300,200"/>
+      </g>
+      <!-- 尾焰 -->
+      <path d="M150,430 L250,470 L120,560 L60,470 Z" fill="url(#jetG)"/>
+      <!-- 弹体 -->
+      <g transform="rotate(-42 260 300)">
+        <path d="M228,120 C228,96 246,72 262,72 C278,72 296,96 296,120 L296,430 L228,430 Z" fill="#17140F"/>
+        <rect x="238" y="150" width="48" height="86" rx="16" fill="#EDE4D2"/>
+        <path d="M228,352 L206,432 L228,414 Z" fill="#17140F"/>
+        <path d="M296,352 L318,432 L296,414 Z" fill="#17140F"/>
+        <path d="M228,430 L296,430 L262,470 Z" fill="#17140F"/>
+      </g>
+    </svg>
+
+    <!-- 红色准星 -->
+    <svg class="a" style="left:420px;top:300px;width:270px;height:200px" viewBox="0 0 270 200">
+      <g fill="none" stroke="#C33A28" stroke-width="1.6">
+        <circle cx="120" cy="92" r="72"/><circle cx="120" cy="92" r="48"/><circle cx="120" cy="92" r="24"/>
+        <line x1="18" y1="92" x2="222" y2="92"/><line x1="120" y1="6" x2="120" y2="178"/>
+        <path d="M196,52 L222,52 L222,36 M222,52 L240,52"/>
+      </g>
+      <circle cx="120" cy="92" r="4" fill="#C33A28"/>
+      <circle cx="222" cy="132" r="7" fill="#C33A28"/>
+    </svg>
+    <div class="a lbl" style="left:624px;top:344px;width:86px;font-size:6.5px;line-height:1.5;color:#C33A28;">
+      VELOCITY PROFILE<br>RANGE VS VELOCITY MAP
+    </div>
+
+    <!-- MOTION STUDY -->
+    <svg class="a" style="left:330px;top:604px;width:302px;height:106px" viewBox="0 0 302 106">
+      <text class="tt" x="0" y="52" font-size="63" fill="#C33A28" textLength="302" lengthAdjust="spacingAndGlyphs">MOTION</text>
+      <text class="tt" x="0" y="102" font-size="63" fill="#C33A28" textLength="302" lengthAdjust="spacingAndGlyphs">STUDY</text>
+    </svg>
+
+    <!-- 页脚信息 -->
+    <div class="a lbl" style="left:24px;top:776px;font-size:9.5px;line-height:1.6;color:#17140F;">
+      RESEARCH &amp; DEVELOPMENT DIVISION<br>TEST SERIES 01
+    </div>
+    <div class="a lbl" style="left:512px;top:776px;font-size:9.5px;color:#17140F;">DATE: 1976</div>
+
+    <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
+  <section class="slide" data-i="6"><div class="poster-fit"><div class="poster p7">
+
+    <svg class="a" style="left:20px;top:14px;width:252px;height:96px" viewBox="0 0 252 96">
+      <text class="tt" x="0" y="94" font-size="118" fill="#17140F" textLength="252" lengthAdjust="spacingAndGlyphs">NEW</text>
+    </svg>
+    <div class="a lbl" style="left:288px;top:52px;width:216px;height:40px;background:#1F4C9E;color:#EDE4D2;font-size:17px;letter-spacing:.06em;display:flex;align-items:center;justify-content:center;">
+      DESIGN FESTIVAL
+    </div>
+    <div class="a tt" style="left:526px;top:48px;font-size:42px;color:#C33A28;">1982</div>
+
+    <svg class="a" style="left:20px;top:108px;width:678px;height:96px" viewBox="0 0 678 96">
+      <text class="tt" x="0" y="94" font-size="118" fill="#17140F" textLength="678" lengthAdjust="spacingAndGlyphs">STANDARD</text>
+    </svg>
+
+    <!-- 26 巨型数字 -->
+    <svg class="a" style="left:24px;top:205px;width:252px;height:350px" viewBox="0 0 252 350">
+      <text class="tt" x="0" y="344" font-size="478" fill="#17140F" textLength="252" lengthAdjust="spacingAndGlyphs">2</text>
+    </svg>
+    <svg class="a" style="left:388px;top:205px;width:262px;height:350px" viewBox="0 0 262 350">
+      <text class="tt" x="0" y="344" font-size="478" fill="#17140F" textLength="262" lengthAdjust="spacingAndGlyphs">6</text>
+    </svg>
+
+    <!-- 蓝色三角 + 箭头 -->
+    <svg class="a" style="left:0;top:0;width:720px;height:1020px;pointer-events:none" viewBox="0 0 720 1020">
+      <polygon points="326,205 468,205 398,282" fill="#1F4C9E"/>
+      <g fill="none" stroke="#1F4C9E" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6,432 L58,432 L26,470 L70,470 L38,508 L82,508"/>
+      </g>
+      <circle cx="528" cy="470" r="42" fill="#C33A28"/>
+      <!-- 定位十字 -->
+      <g fill="none" stroke="#8B80AE" stroke-width="1.6">
+        <circle cx="596" cy="248" r="13"/><line x1="596" y1="228" x2="596" y2="268"/><line x1="576" y1="248" x2="616" y2="248"/>
+        <circle cx="252" cy="548" r="10"/><line x1="252" y1="532" x2="252" y2="564"/><line x1="236" y1="548" x2="268" y2="548"/>
+        <circle cx="190" cy="150" r="10"/><line x1="190" y1="134" x2="190" y2="166"/><line x1="174" y1="150" x2="206" y2="150"/>
+      </g>
+    </svg>
+
+    <!-- 红色圆盘 -->
+    <svg class="a" style="left:60px;top:530px;width:520px;height:96px" viewBox="0 0 520 96">
+      <path d="M14,44 L506,44 L506,68 A246,32 0 0,1 14,68 Z" fill="#A32E20"/>
+      <ellipse cx="260" cy="44" rx="246" ry="32" fill="#C33A28"/>
+    </svg>
+
+    <!-- 底部信息栏 -->
+    <div class="a rule" style="left:20px;top:660px;width:680px;height:3;color:#17140F"></div>
+    <div class="a" style="left:20px;top:678px;width:96px;height:26px;display:flex;">
+      <i style="flex:1;background:#1F4C9E;display:block"></i>
+      <i style="flex:1;background:#EDE4D2;border:1px solid #17140F;display:block"></i>
+      <i style="flex:1;background:#C33A28;display:block"></i>
+      <i style="flex:1;background:#17140F;display:block"></i>
+    </div>
+    <div class="a lbl" style="left:20px;top:718px;width:132px;font-size:9.5px;line-height:1.5;color:#17140F;">
+      A CELEBRATION OF VISIONARY DESIGN. THE NEXT FUTURE STARTS HERE.
+    </div>
+
+    <div class="a lbl" style="left:292px;top:678px;width:172px;font-size:9.5px;line-height:1.6;color:#17140F;">
+      DATES<br><b style="font-size:13px;">MAY 14–23</b><br>1982
+    </div>
+    <div class="a lbl" style="left:478px;top:678px;width:172px;font-size:9.5px;line-height:1.6;color:#17140F;">
+      VENUE<br>RIVERFRONT EXHIBITION HALL<br>NORTH HARBOR DISTRICT
+    </div>
+    <div class="a rule" style="left:280px;top:674px;width:1.6px;height:96px;color:#17140F"></div>
+    <div class="a rule" style="left:466px;top:674px;width:1.6px;height:96px;color:#17140F"></div>
+    <div class="a lbl" style="left:20px;top:790px;width:150px;font-size:9.5px;line-height:1.6;color:#17140F;">
+      PROGRAM<br>EXHIBITIONS<br>TALKS / WORKSHOPS<br>FILMS / INSTALLATIONS
+    </div>
+    <div class="a" style="left:600px;top:800px;width:100px;height:100px;background:#1F4C9E">
+      <svg viewBox="0 0 100 100" style="width:100%;height:100%">
+        <g fill="none" stroke="#EDE4D2" stroke-width="2.4">
+          <circle cx="50" cy="50" r="30"/>
+          <ellipse cx="50" cy="50" rx="13" ry="30"/>
+          <line x1="20" y1="50" x2="80" y2="50"/>
+          <line x1="25" y1="34" x2="75" y2="34"/>
+          <line x1="25" y1="66" x2="75" y2="66"/>
+        </g>
+      </svg>
+    </div>
+
+    <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
+  <section class="slide" data-i="7"><div class="poster-fit"><div class="poster p8">
+
+    <svg class="a" style="left:20px;top:14px;width:416px;height:190px" viewBox="0 0 416 190">
+      <text class="tt" x="0" y="100" font-size="118" fill="#17140F" textLength="416" lengthAdjust="spacingAndGlyphs">NIGHT</text>
+      <text class="tt" x="0" y="186" font-size="118" fill="#17140F" textLength="416" lengthAdjust="spacingAndGlyphs">FLIGHT</text>
+    </svg>
+
+    <div class="a lbl" style="left:540px;top:40px;width:170px;font-size:10px;line-height:1.55;letter-spacing:.09em;color:#17140F;">
+      ARRIVE<br>BEFORE<br>YOU LEAVE
+    </div>
+    <div class="a" style="left:540px;top:96px;width:168px;height:10px;background:#1F4C9E"></div>
+    <div class="a" style="left:548px;top:120px;width:158px;height:10px;background:repeating-linear-gradient(90deg,#17140F 0 2px,transparent 2px 6px);"></div>
+
+    <!-- 深色夜空 -->
+    <div class="a" style="left:0;top:196px;width:720px;height:824px;background:#17140F"></div>
+
+    <!-- 08 -->
+    <svg class="a" style="left:20px;top:214px;width:248px;height:288px" viewBox="0 0 248 288">
+      <text class="tt" x="0" y="284" font-size="400" fill="#EDE4D2" textLength="248" lengthAdjust="spacingAndGlyphs">08</text>
+    </svg>
+
+    <!-- 纸飞机 + 蓝色弧线 + 公路 -->
+    <svg class="a" style="left:0;top:0;width:720px;height:1020px;pointer-events:none" viewBox="0 0 720 1020">
+      <!-- 红色细线 -->
+      <g stroke="#C33A28" stroke-width="1.2" fill="none" opacity=".9">
+        <path d="M60,960 L470,640"/><path d="M700,560 L420,700"/><path d="M300,250 L700,470"/>
+      </g>
+      <!-- 蓝色弧线 -->
+      <path d="M-20,796 C170,520 280,570 420,432 C540,320 640,306 740,322"
+            fill="none" stroke="#1F4C9E" stroke-width="40" stroke-linecap="round"/>
+      <!-- 纸飞机 -->
+      <g>
+        <polygon points="330,456 566,320 496,472" fill="#EDE4D2"/>
+        <polygon points="496,472 566,320 548,436" fill="#C9BEA8"/>
+        <polygon points="330,456 496,472 430,494" fill="#F5EEE0"/>
+      </g>
+      <!-- 公路 -->
+      <polygon points="0,1020 70,706 430,694 322,1020" fill="#EDE4D2"/>
+      <polygon points="322,1020 430,694 720,700 720,1020" fill="#17140F"/>
+      <g stroke="#17140F" stroke-width="5" fill="none">
+        <path d="M70,706 L0,1020"/>
+        <g stroke-dasharray="36 26"><path d="M258,1000 L418,700"/></g>
+      </g>
+      <!-- 红色半日 -->
+      <circle cx="470" cy="700" r="76" fill="#C33A28"/>
+      <polygon points="330,1020 430,694 720,700 720,1020" fill="#17140F"/>
+      <!-- 红色靶标 -->
+      <g fill="none" stroke="#C33A28" stroke-width="1.4">
+        <circle cx="470" cy="256" r="26"/><circle cx="470" cy="256" r="9"/>
+        <line x1="470" y1="222" x2="470" y2="290"/><line x1="436" y1="256" x2="504" y2="256"/>
+        <circle cx="126" cy="742" r="24"/><circle cx="126" cy="742" r="8"/>
+        <line x1="126" y1="710" x2="126" y2="774"/><line x1="94" y1="742" x2="158" y2="742"/>
+        <circle cx="556" cy="820" r="34"/><circle cx="556" cy="820" r="12"/>
+        <line x1="556" y1="778" x2="556" y2="862"/><line x1="514" y1="820" x2="598" y2="820"/>
+      </g>
+      <circle cx="470" cy="256" r="5" fill="#C33A28"/>
+      <circle cx="126" cy="742" r="5" fill="#C33A28"/>
+      <circle cx="556" cy="820" r="6" fill="#C33A28"/>
+      <!-- 星点 -->
+      <g fill="#EDE4D2">
+        <path d="M606,404 L610,416 L622,420 L610,424 L606,436 L602,424 L590,420 L602,416 Z"/>
+        <path d="M262,318 L265,327 L274,330 L265,333 L262,342 L259,333 L250,330 L259,327 Z"/>
+        <circle cx="672" cy="640" r="2.4"/><circle cx="356" cy="600" r="2"/>
+      </g>
+    </svg>
+
+    <!-- 底部信息 -->
+    <div class="a rule" style="left:20px;top:884px;width:680px;height:1.6;color:#EDE4D2"></div>
+    <div class="a lbl" style="left:24px;top:900px;font-size:27px;letter-spacing:.06em;color:#EDE4D2;">ROUTE 08 ↗</div>
+    <div class="a tt" style="left:282px;top:892px;font-size:40px;color:#C33A28;">21.07.80</div>
+    <svg class="a" style="left:600px;top:900px;width:56px;height:56px" viewBox="0 0 56 56">
+      <g fill="none" stroke="#EDE4D2" stroke-width="1.8">
+        <circle cx="28" cy="28" r="22"/><ellipse cx="28" cy="28" rx="9" ry="22"/>
+        <line x1="6" y1="28" x2="50" y2="28"/><line x1="9" y1="18" x2="47" y2="18"/><line x1="9" y1="38" x2="47" y2="38"/>
+      </g>
+    </svg>
+    <div class="a" style="left:670px;top:906px;display:flex;gap:6px;">
+      <i style="width:22px;height:10px;background:#1F4C9E;display:block"></i>
+      <i style="width:22px;height:10px;background:#EDE4D2;display:block"></i>
+      <i style="width:22px;height:10px;background:#C33A28;display:block"></i>
+    </div>
+
+    <svg class="grain" viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" filter="url(#grainF)"/></svg></div></div></section>
+
+</main>
+
+<!-- 统一质感层 -->
+<div class="veil"><div class="dots"></div><div class="vig"></div></div>
+
+<!-- 顶部信息 -->
+<header class="topbar">
+  <span class="tb-l">Portfolio · Poster Set</span>
+  <span class="tb-r"><b id="cur">01</b> / 08</span>
+</header>
+
+<!-- 前后切换按钮 -->
+<button class="edge prev" id="btnPrev" aria-label="上一张海报">
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 2.5 L4.5 8 L10.5 13.5"/></svg>
+</button>
+<button class="edge next" id="btnNext" aria-label="下一张海报">
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 2.5 L11.5 8 L5.5 13.5"/></svg>
+</button>
+
+<!-- 底部信息台 + 进度轨 -->
+<footer class="dock">
+  <div class="dock-in">
+    <div class="meta" id="meta">
+      <span class="idx" id="idxNum">01</span>
+      <span class="txt">
+        <b class="mt-title" id="mtTitle">HOME SIGNAL</b>
+        <i class="mt-sub" id="mtSub">家用录像系统 · 1978</i>
+      </span>
+    </div>
+  </div>
+  <nav class="rail" id="rail" aria-label="海报进度"></nav>
+</footer>
+
+<div class="hint" id="hint">滚轮 / 滑动 / ← → 切换</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ---------- 海报清单 ---------- */
+  var POSTERS = [
+    { t:'HOME SIGNAL',   s:'家用录像系统 · 1978' },
+    { t:'PLAYER ONE',    s:'街机控制信号 · 1979' },
+    { t:'EXPRESS CITY',  s:'环城快线 72' },
+    { t:'CHANNEL ZERO',  s:'首次播出 · 1976' },
+    { t:'DEEP ORBIT',    s:'深空档案 · 1977' },
+    { t:'VELOCITY TEST', s:'运动研究 · 1976' },
+    { t:'NEW STANDARD',  s:'设计双年展 · 1982' },
+    { t:'NIGHT FLIGHT',  s:'夜航 · 21.07.80' }
+  ];
+  var N = POSTERS.length;
+
+  var stage   = document.getElementById('stage');
+  var slides  = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var meta    = document.getElementById('meta');
+  var idxNum  = document.getElementById('idxNum');
+  var mtTitle = document.getElementById('mtTitle');
+  var mtSub   = document.getElementById('mtSub');
+  var cur     = document.getElementById('cur');
+  var rail    = document.getElementById('rail');
+  var hint    = document.getElementById('hint');
+  var btnPrev = document.getElementById('btnPrev');
+  var btnNext = document.getElementById('btnNext');
+
+  var idx = 0;          /* 当前页 */
+  var busy = false;     /* 动画锁，避免高频触发导致跳页 */
+  var LOCK = 620;       /* 动画锁时长 */
+
+  /* ---------- 工具 ---------- */
+  function pad(n){ return (n < 10 ? '0' : '') + n; }
+
+  function idxText(el, i){
+    el.textContent = pad(i + 1);
+  }
+
+  /* ---------- 等比适配：保证海报在任意尺寸下比例正确、完整可见 ---------- */
+  function fit(){
+    var vw = window.innerWidth, vh = window.innerHeight;
+    /* 预留：左右给切换按钮，上下给顶部信息条与底部信息台 */
+    var padX = vw < 820 ? 44  : 150;
+    var padY = vh < 700 ? 120 : 196;
+    var k = Math.min((vw - padX) / 720, (vh - padY) / 1020);
+    k = Math.max(0.26, Math.min(k, 1.5));   /* 上限 1.5 倍，避免 4K 屏下噪点纹理被过度放大 */
+    document.documentElement.style.setProperty('--k', k.toFixed(4));
+  }
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', function(){ setTimeout(fit, 140); });
+  fit();
+
+  /* ---------- 进度轨 ---------- */
+  var segs = [];
+  (function buildRail(){
+    for(var i = 0; i < N; i++){
+      (function(i){
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('aria-label', '第 ' + (i + 1) + ' 张');
+        b.addEventListener('click', function(){ go(i); used(); });
+        rail.appendChild(b);
+        segs.push(b);
+      })(i);
+    }
+  })();
+
+  /* ---------- 状态渲染 ---------- */
+  function paint(animateMeta){
+    for(var i = 0; i < N; i++){
+      var el = slides[i];
+      el.classList.toggle('is-active', i === idx);
+      el.classList.toggle('is-prev',   i <  idx);
+      el.classList.toggle('is-next',   i >  idx);
+    }
+    idxText(idxNum, idx);
+    idxText(cur, idx);
+    mtTitle.textContent = POSTERS[idx].t;
+    mtSub.textContent   = POSTERS[idx].s;
+    for(var j = 0; j < N; j++) segs[j].classList.toggle('on', j === idx);
+    btnPrev.disabled = (idx === 0);
+    btnNext.disabled = (idx === N - 1);
+
+    if(animateMeta){
+      meta.classList.remove('swap');
+      void meta.offsetWidth;          /* 强制重排以重播动画 */
+      meta.classList.add('swap');
+    }
+  }
+
+  /* ---------- 翻页 ---------- */
+  function go(to){
+    if(busy) return;
+    to = Math.max(0, Math.min(N - 1, to));
+    if(to === idx) return;
+    busy = true;
+    idx = to;
+    paint(true);
+    setTimeout(function(){ busy = false; }, LOCK);
+  }
+
+  /* ---------- 提示 ---------- */
+  var hinted = false;
+  function used(){
+    if(hinted) return;
+    hinted = true;
+    hint.classList.add('off');
+    setTimeout(function(){ hint.style.display = 'none'; }, 700);
+  }
+  setTimeout(used, 6000);           /* 6 秒后自行淡出 */
+
+  /* ---------- 1. 点击按钮 ---------- */
+  btnPrev.addEventListener('click', function(){ go(idx - 1); used(); });
+  btnNext.addEventListener('click', function(){ go(idx + 1); used(); });
+
+  /* ---------- 2. 键盘 ---------- */
+  window.addEventListener('keydown', function(e){
+    var k = e.key;
+    if(k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown' || k === ' '){
+      e.preventDefault(); go(idx + 1); used();
+    } else if(k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp'){
+      e.preventDefault(); go(idx - 1); used();
+    } else if(k === 'Home'){ e.preventDefault(); go(0); used(); }
+    else if(k === 'End'){ e.preventDefault(); go(N - 1); used(); }
+  });
+
+  /* ---------- 3. 滚轮 / 触控板 ---------- */
+  var whellAcc = 0, wheelLast = 0;
+  window.addEventListener('wheel', function(e){
+    e.preventDefault();
+    used();
+    if(busy) return;
+    var now = Date.now();
+    if(now - wheelLast > 280) whellAcc = 0;      /* 停顿即视为新一次手势 */
+    wheelLast = now;
+    var d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    whellAcc += d;
+    if(Math.abs(whellAcc) > 46){
+      go(idx + (whellAcc > 0 ? 1 : -1));
+      whellAcc = 0;
+    }
+  }, { passive:false });
+
+  /* ---------- 4. 拖拽滑动（Pointer Events 同时覆盖鼠标与触摸） ---------- */
+  var drag = { on:false, x0:0, y0:0, dx:0, t0:0, locked:false };
+
+  function activeEl(){ return slides[idx]; }
+
+  function clearInline(){
+    for(var i = 0; i < N; i++){
+      var s = slides[i];
+      s.style.transition = '';
+      s.style.transform  = '';
+      s.style.opacity    = '';
+    }
+  }
+
+  stage.addEventListener('pointerdown', function(e){
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    drag.on = true; drag.x0 = e.clientX; drag.y0 = e.clientY;
+    drag.dx = 0; drag.t0 = Date.now(); drag.locked = false;
+    try{ stage.setPointerCapture(e.pointerId); }catch(err){}
+  });
+
+  stage.addEventListener('pointermove', function(e){
+    if(!drag.on) return;
+    var mx = e.clientX - drag.x0;
+    var my = e.clientY - drag.y0;
+
+    if(!drag.locked){
+      if(Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+      if(Math.abs(my) > Math.abs(mx)){ drag.on = false; return; }  /* 纵向手势交还页面 */
+      drag.locked = true;
+      stage.classList.add('dragging');
+      activeEl().style.transition = 'none';
+      var nb0 = slides[drag.dx < 0 ? idx + 1 : idx - 1];
+      if(nb0) nb0.style.transition = 'none';
+    }
+
+    drag.dx = mx;
+    var w = window.innerWidth || 1;
+    var p = Math.min(Math.abs(mx) / w, 1);
+    var el = activeEl();
+    el.style.transform = 'translate3d(' + mx + 'px,0,0) scale(' + (1 - Math.min(p, .09) * .55) + ')';
+    el.style.opacity   = String(1 - Math.min(p * .55, .5));
+
+    /* 相邻页跟手推进，保证"推送"连续、不断层 */
+    var nb = slides[mx < 0 ? idx + 1 : idx - 1];
+    if(nb && !nb.classList.contains('is-active')){
+      nb.style.transition = 'none';
+      var side = mx < 0 ? 1 : -1;
+      nb.style.transform = 'translate3d(' + (side * 7 * (1 - p)) + '%,0,0) scale(' + (.93 + .07 * p) + ')';
+      nb.style.opacity   = String(Math.min(p * 1.05, .95));
+    }
+  });
+
+  function endDrag(){
+    if(!drag.on) return;
+    var wasLocked = drag.locked;
+    var d  = drag.dx;
+    var dt = Math.max(Date.now() - drag.t0, 1);
+    var v  = Math.abs(d) / dt;                     /* 甩动速度 px/ms */
+
+    drag.on = false; drag.locked = false; drag.dx = 0;
+    stage.classList.remove('dragging');
+
+    var threshold = Math.min(120, (window.innerWidth || 800) * 0.15);
+    /* 最小位移下限 18px：即便甩动速度很快，位移过小也不翻页，避免鼠标轻微抖动误触 */
+    var commit = wasLocked && Math.abs(d) > 18 && (Math.abs(d) > threshold || v > 0.5);
+
+    /* 先恢复 CSS 过渡并清掉内联值：浏览器会从"当前拖拽位置"平滑补间到类目标态 */
+    clearInline();
+
+    if(commit) go(idx + (d < 0 ? 1 : -1));
+  }
+
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+  stage.addEventListener('pointerleave', function(){ if(drag.on) endDrag(); });
+
+  /* 阻止拖拽时选中文本 / 触发原生图片拖拽 */
+  stage.addEventListener('dragstart', function(e){ e.preventDefault(); });
+
+  /* ---------- 初始化 ---------- */
+  paint(false);
+})();
+</script>
+</body>
+</html>
